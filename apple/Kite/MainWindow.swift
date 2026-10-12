@@ -16,6 +16,8 @@ struct MainWindow: View {
                 statusText
                     .padding(.top, 22)
                 Spacer(minLength: 20)
+                UpdateBanner()
+                    .padding(.bottom, 10)
                 statsCard
                 settingsCard
                     .padding(.top, 10)

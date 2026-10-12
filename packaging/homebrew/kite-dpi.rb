@@ -9,6 +9,7 @@ cask "kite-dpi" do
   desc "DPI bypass that runs entirely on your Mac, no VPN server"
   homepage "https://github.com/bkrdmrcioglu/Kite"
 
+  auto_updates true
   depends_on macos: :sonoma
 
   app "Kite DPI.app"

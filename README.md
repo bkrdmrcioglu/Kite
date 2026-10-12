@@ -32,6 +32,7 @@ Windows sürümü henüz imzalı değil. SmartScreen uyarısı çıkarsa **Ek bi
 2. **TLS kayıt bölme:** TLS ClientHello'yu site adının ortasından iki ayrı TLS kaydına böler ve ayrı TCP parçaları olarak gönderir. DPI site adını göremez, sunucu kayıtları sorunsuz birleştirir.
 3. **Yerel proxy:** Sistemin proxy ayarını kendine yönlendirir. Kapanınca, çökünce ya da bilgisayar kapanınca eski ayarı geri yükler.
 4. **Uygulama desteği:** Proxy ayarına uymayan uygulamalar için ilk açılışta bir kez yönetici izni ister ve bu uygulamaların adreslerini hosts dosyasıyla Kite DPI'a yönlendirir. Kite DPI bu bağlantıları 443 portunda karşılar. Homebrew ile kaldırırken bu satırlar otomatik silinir.
+5. **Güncellemeler:** Açılışta ve 6 saatte bir bu deponun GitHub sürümlerine bakar. Yeni sürüm varsa panelde **Güncelle** düğmesi çıkar; tek tıkla indirip kurar ve kendini yeniden başlatır.
 
 | Platform | Yöntem |
 |---|---|
@@ -112,7 +113,7 @@ The script opens one TLS connection per strategy and shows which ones get throug
 
 ### Privacy
 
-Kite DPI has no servers, analytics or telemetry. The only connections it makes on its own are DNS-over-TCP queries to public resolvers (1.1.1.1, 1.0.0.1, 8.8.8.8, 9.9.9.9).
+Kite DPI has no servers, analytics or telemetry. The only connections it makes on its own are DNS-over-TCP queries to public resolvers (1.1.1.1, 1.0.0.1, 8.8.8.8, 9.9.9.9) and an update check against this repository's GitHub releases at launch and every 6 hours.
 
 ### License
 

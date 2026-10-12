@@ -9,7 +9,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // after the window is up, so the permission prompt has context
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            MainActor.assumeIsolated { Engine.shared.ensureAppSupport() }
+            MainActor.assumeIsolated {
+                Engine.shared.ensureAppSupport()
+                Updater.shared.startChecking()
+            }
         }
     }
 
@@ -69,6 +72,8 @@ struct MenuView: View {
             if let err = engine.lastError {
                 Text(err).font(.caption).foregroundStyle(.red)
             }
+
+            UpdateBanner()
 
             Divider()
 

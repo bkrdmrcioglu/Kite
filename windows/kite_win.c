@@ -24,6 +24,8 @@
 #define PROXY_PORT 8899
 #define SNI_PORT 443
 #define WM_TRAY (WM_APP + 1)
+#define WM_KITE_UPDATE (WM_APP + 2)
+#define UPDATE_TIMER 2
 #define ID_OPEN 1000
 #define ID_TOGGLE 1001
 #define ID_QUIT 1004
@@ -371,13 +373,186 @@ static void engine_stop(void)
     tray_update();
 }
 
+/* ---- updates ------------------------------------------------------------
+ * Checks GitHub releases at launch and every 6 hours. Installing renames the
+ * running exe (Windows allows that), moves the new one into its place, starts
+ * it with --after-update and quits; the new instance waits for our mutex. */
+
+enum { UPD_NONE, UPD_AVAILABLE, UPD_INSTALLING, UPD_FAILED };
+static int g_upd_state;
+static wchar_t g_upd_version[32];
+static char g_upd_url[512];
+
+static int version_newer(const char *a, const char *b)
+{
+    int x[3] = { 0 }, y[3] = { 0 };
+    sscanf(a, "%d.%d.%d", &x[0], &x[1], &x[2]);
+    sscanf(b, "%d.%d.%d", &y[0], &y[1], &y[2]);
+    for (int i = 0; i < 3; i++)
+        if (x[i] != y[i])
+            return x[i] > y[i];
+    return 0;
+}
+
+/* Downloads url into a malloc'd buffer (or a file when path is set). */
+static char *http_get(const char *url, const wchar_t *path, size_t *len)
+{
+    HINTERNET net = InternetOpenW(L"Kite DPI", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!net)
+        return NULL;
+    HINTERNET req = InternetOpenUrlA(net, url, "Accept: application/vnd.github+json\r\n", (DWORD)-1,
+                                     INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_SECURE, 0);
+    char *buf = NULL;
+    size_t n = 0, cap = 0;
+    FILE *f = path ? _wfopen(path, L"wb") : NULL;
+    DWORD status = 0, slen = sizeof(status);
+    if (req && HttpQueryInfoA(req, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &status, &slen, NULL) &&
+        status == 200 && (!path || f)) {
+        char chunk[16384];
+        DWORD got;
+        while (InternetReadFile(req, chunk, sizeof(chunk), &got) && got > 0) {
+            if (f) {
+                fwrite(chunk, 1, got, f);
+            } else {
+                if (n + got + 1 > cap) {
+                    cap = (n + got + 1) * 2;
+                    char *nb = realloc(buf, cap);
+                    if (!nb) break;
+                    buf = nb;
+                }
+                memcpy(buf + n, chunk, got);
+            }
+            n += got;
+        }
+        if (buf)
+            buf[n] = 0;
+        if (f)
+            buf = (char *)1; /* success marker for file downloads */
+    }
+    if (f)
+        fclose(f);
+    if (req)
+        InternetCloseHandle(req);
+    InternetCloseHandle(net);
+    if (len)
+        *len = n;
+    return buf;
+}
+
+/* Copies the JSON string value that follows key (e.g. "tag_name":"v0.1.4"). */
+static int json_string_after(const char *json, const char *from, const char *key, char *out, size_t cap)
+{
+    const char *p = strstr(from ? from : json, key);
+    if (!p || !(p = strchr(p + strlen(key), '"')))
+        return 0;
+    p++;
+    size_t i = 0;
+    while (*p && *p != '"' && i + 1 < cap)
+        out[i++] = *p++;
+    out[i] = 0;
+    return i > 0;
+}
+
+static DWORD WINAPI update_check_thread(void *arg)
+{
+    (void)arg;
+    char *json = http_get("https://api.github.com/repos/bkrdmrcioglu/Kite/releases/latest", NULL, NULL);
+    if (!json)
+        return 0;
+    char tag[32], url[512];
+    const char *exe = strstr(json, "-Windows-x64.exe\"");
+    if (json_string_after(json, NULL, "\"tag_name\"", tag, sizeof(tag)) && exe) {
+        /* walk back to the asset's download URL */
+        const char *u = exe;
+        while (u > json && strncmp(u, "\"browser_download_url\"", 22) != 0)
+            u--;
+        const char *v = tag[0] == 'v' ? tag + 1 : tag;
+        if (u > json && json_string_after(json, u, "\"browser_download_url\"", url, sizeof(url)) &&
+            strstr(url, "-Windows-x64.exe") && version_newer(v, kite_version())) {
+            strcpy(g_upd_url, url);
+            swprintf(g_upd_version, 32, L"%hs", v);
+            PostMessageW(g_hwnd, WM_KITE_UPDATE, UPD_AVAILABLE, 0);
+        }
+    }
+    free(json);
+    return 0;
+}
+
+static void update_check(void)
+{
+    if (g_upd_state == UPD_INSTALLING)
+        return;
+    HANDLE t = CreateThread(NULL, 0, update_check_thread, NULL, 0, NULL);
+    if (t)
+        CloseHandle(t);
+}
+
+static DWORD WINAPI update_install_thread(void *arg)
+{
+    (void)arg;
+    wchar_t self[MAX_PATH], old[MAX_PATH + 8], tmp[MAX_PATH];
+    GetModuleFileNameW(NULL, self, MAX_PATH);
+    swprintf(old, MAX_PATH + 8, L"%ls.old", self);
+    GetTempPathW(MAX_PATH, tmp);
+    wcscat(tmp, L"KiteDPI-update.exe");
+
+    size_t len = 0;
+    int ok = http_get(g_upd_url, tmp, &len) != NULL && len > 100 * 1024;
+    if (ok) {
+        FILE *f = _wfopen(tmp, L"rb");
+        char mz[2] = { 0 };
+        ok = f && fread(mz, 1, 2, f) == 2 && mz[0] == 'M' && mz[1] == 'Z';
+        if (f)
+            fclose(f);
+    }
+    if (ok) {
+        DeleteFileW(old);
+        ok = MoveFileExW(self, old, MOVEFILE_REPLACE_EXISTING);
+        if (ok && !MoveFileExW(tmp, self, MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED)) {
+            MoveFileExW(old, self, MOVEFILE_REPLACE_EXISTING); /* put the old exe back */
+            ok = 0;
+        }
+    }
+    DeleteFileW(tmp);
+    PostMessageW(g_hwnd, WM_KITE_UPDATE, ok ? UPD_INSTALLING : UPD_FAILED, 0);
+    return 0;
+}
+
+static void update_install(void)
+{
+    if (g_upd_state != UPD_AVAILABLE)
+        return;
+    g_upd_state = UPD_INSTALLING;
+    HANDLE t = CreateThread(NULL, 0, update_install_thread, NULL, 0, NULL);
+    if (t)
+        CloseHandle(t);
+}
+
+/* Called on the UI thread once the new exe is in place. */
+static void update_relaunch(void)
+{
+    wchar_t self[MAX_PATH], cmd[MAX_PATH + 32];
+    GetModuleFileNameW(NULL, self, MAX_PATH);
+    swprintf(cmd, MAX_PATH + 32, L"\"%ls\" --after-update", self);
+    STARTUPINFOW si;
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi;
+    if (CreateProcessW(self, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+    }
+    DestroyWindow(g_hwnd); /* restores the proxy and exits */
+}
+
 /* ---- flyout panel ------------------------------------------------------- */
 
-enum { HIT_NONE, HIT_MAIN, HIT_AUTOSTART, HIT_QUIT };
+enum { HIT_NONE, HIT_MAIN, HIT_AUTOSTART, HIT_UPDATE, HIT_QUIT };
 
 typedef struct {
     ARGB bg, card, hover, text, sub, line, track_off, knob_off, accent;
     COLORREF ctext, csub;
+    ARGB update_bg;
 } Theme;
 
 static Theme T;
@@ -404,10 +579,10 @@ static void load_theme(void)
 {
     if (system_dark()) {
         T = (Theme){ 0xFF202020, 0xFF2B2B2B, 0xFF323232, 0xFFFFFFFF, 0xFFA8A8A8, 0xFF3A3A3A,
-                     0xFF3F3F3F, 0xFFCFCFCF, 0xFF22C55E, RGB(255, 255, 255), RGB(168, 168, 168) };
+                     0xFF3F3F3F, 0xFFCFCFCF, 0xFF22C55E, RGB(255, 255, 255), RGB(168, 168, 168), 0xFF1E2A3D };
     } else {
         T = (Theme){ 0xFFF3F3F3, 0xFFFFFFFF, 0xFFEAEAEA, 0xFF1A1A1A, 0xFF5F5F5F, 0xFFE0E0E0,
-                     0xFFFFFFFF, 0xFF5F5F5F, 0xFF16A34A, RGB(26, 26, 26), RGB(95, 95, 95) };
+                     0xFFFFFFFF, 0xFF5F5F5F, 0xFF16A34A, RGB(26, 26, 26), RGB(95, 95, 95), 0xFFE3ECFD };
     }
 }
 
@@ -516,9 +691,13 @@ static void set_hit(int id, int x, int y, int w, int h)
     hit_rects[id] = (RECT){ S(x), S(y), S(x + w), S(y + h) };
 }
 
+/* Extra height while the "update available" row is shown. */
+static int update_row(void) { return g_upd_state == UPD_NONE ? 0 : 52; }
+
 static void paint_panel(HDC target)
 {
-    int W = S(PANEL_W), H = S(PANEL_H);
+    int u = update_row();
+    int W = S(PANEL_W), H = S(PANEL_H + u);
     HDC dc = CreateCompatibleDC(target);
     HBITMAP bmp = CreateCompatibleBitmap(target, W, H);
     HGDIOBJ oldbmp = SelectObject(dc, bmp);
@@ -549,19 +728,30 @@ static void paint_panel(HDC target)
     GdipCreatePen1(T.line, 1.0f, UnitPixel, &pen);
     GdipDrawLineI(g, pen, S(PANEL_W / 2), S(94), S(PANEL_W / 2), S(146));
 
+    /* update row */
+    hit_rects[HIT_UPDATE] = (RECT){ 0, 0, 0, 0 };
+    if (u) {
+        fill_round(g, T.update_bg, (REAL)S(16), (REAL)S(168), (REAL)S(PANEL_W - 32), (REAL)S(44), (REAL)S(8));
+        if (g_upd_state == UPD_AVAILABLE) {
+            set_hit(HIT_UPDATE, PANEL_W - 16 - 8 - 84, 175, 84, 30);
+            fill_round(g, g_hover == HIT_UPDATE ? 0xFF2563EB : 0xFF3B82F6, (REAL)S(PANEL_W - 16 - 8 - 84),
+                       (REAL)S(175), (REAL)S(84), (REAL)S(30), (REAL)S(5));
+        }
+    }
+
     /* option rows */
-    set_hit(HIT_AUTOSTART, 8, 172, PANEL_W - 16, 44);
+    set_hit(HIT_AUTOSTART, 8, 172 + u, PANEL_W - 16, 44);
     if (g_hover == HIT_AUTOSTART)
-        fill_round(g, T.hover, (REAL)S(8), (REAL)S(172), (REAL)S(PANEL_W - 16), (REAL)S(44), (REAL)S(6));
-    draw_switch(g, S(PANEL_W - 20 - 40), S(184), S(40), S(20), g_autostart);
+        fill_round(g, T.hover, (REAL)S(8), (REAL)S(172 + u), (REAL)S(PANEL_W - 16), (REAL)S(44), (REAL)S(6));
+    draw_switch(g, S(PANEL_W - 20 - 40), S(184 + u), S(40), S(20), g_autostart);
 
     /* footer */
-    GdipDrawLineI(g, pen, 0, S(226), W, S(226));
+    GdipDrawLineI(g, pen, 0, S(226 + u), W, S(226 + u));
     GdipDeletePen(pen);
-    set_hit(HIT_QUIT, PANEL_W - 16 - 72, 234, 72, 30);
-    fill_round(g, g_hover == HIT_QUIT ? T.hover : T.card, (REAL)S(PANEL_W - 16 - 72), (REAL)S(234),
+    set_hit(HIT_QUIT, PANEL_W - 16 - 72, 234 + u, 72, 30);
+    fill_round(g, g_hover == HIT_QUIT ? T.hover : T.card, (REAL)S(PANEL_W - 16 - 72), (REAL)S(234 + u),
                (REAL)S(72), (REAL)S(30), (REAL)S(5));
-    stroke_round(g, T.line, (REAL)S(PANEL_W - 16 - 72) + 0.5f, (REAL)S(234) + 0.5f, (REAL)S(72) - 1,
+    stroke_round(g, T.line, (REAL)S(PANEL_W - 16 - 72) + 0.5f, (REAL)S(234 + u) + 0.5f, (REAL)S(72) - 1,
                  (REAL)S(30) - 1, (REAL)S(5), 1.0f);
     GdipDeleteGraphics(g);
 
@@ -583,12 +773,26 @@ static void paint_panel(HDC target)
     text_at(dc, f_caption, T.csub, S(PANEL_W / 2 + 16), S(92), S(140), S(18), L"İndirilen veri", DT_LEFT | DT_VCENTER);
     text_at(dc, f_big, T.ctext, S(PANEL_W / 2 + 16), S(112), S(140), S(34), bytes, DT_LEFT | DT_VCENTER);
 
-    text_at(dc, f_body, T.ctext, S(20), S(172), S(260), S(44), L"Windows açılınca başlat", DT_LEFT | DT_VCENTER);
+    if (u) {
+        wchar_t line[96];
+        if (g_upd_state == UPD_AVAILABLE)
+            swprintf(line, 96, L"Güncelleme var · %ls", g_upd_version);
+        else if (g_upd_state == UPD_INSTALLING)
+            wcscpy(line, L"Güncelleme indiriliyor…");
+        else
+            wcscpy(line, L"Güncelleme kurulamadı");
+        text_at(dc, f_body, T.ctext, S(30), S(168), S(220), S(44), line, DT_LEFT | DT_VCENTER);
+        if (g_upd_state == UPD_AVAILABLE)
+            text_at(dc, f_body, RGB(255, 255, 255), S(PANEL_W - 16 - 8 - 84), S(175), S(84), S(30), L"Güncelle",
+                    DT_CENTER | DT_VCENTER);
+    }
+
+    text_at(dc, f_body, T.ctext, S(20), S(172 + u), S(260), S(44), L"Windows açılınca başlat", DT_LEFT | DT_VCENTER);
 
     wchar_t ver[48];
     swprintf(ver, 48, L"Kite DPI %hs", kite_version());
-    text_at(dc, f_caption, T.csub, S(20), S(234), S(160), S(30), ver, DT_LEFT | DT_VCENTER);
-    text_at(dc, f_body, T.ctext, S(PANEL_W - 16 - 72), S(234), S(72), S(30), L"Çıkış", DT_CENTER | DT_VCENTER);
+    text_at(dc, f_caption, T.csub, S(20), S(234 + u), S(160), S(30), ver, DT_LEFT | DT_VCENTER);
+    text_at(dc, f_body, T.ctext, S(PANEL_W - 16 - 72), S(234 + u), S(72), S(30), L"Çıkış", DT_CENTER | DT_VCENTER);
 
     BitBlt(target, 0, 0, W, H, dc, 0, 0, SRCCOPY);
     SelectObject(dc, oldbmp);
@@ -631,7 +835,7 @@ static void panel_show(void)
         load_fonts();
     }
 
-    int W = S(PANEL_W), H = S(PANEL_H), m = S(12);
+    int W = S(PANEL_W), H = S(PANEL_H + update_row()), m = S(12);
     RECT wa = mi.rcWork;
     int x = cur.x > (wa.left + wa.right) / 2 ? wa.right - W - m : wa.left + m;
     int y = cur.y > (wa.top + wa.bottom) / 2 ? wa.bottom - H - m : wa.top + m;
@@ -663,6 +867,9 @@ static void panel_click(int hit)
     switch (hit) {
     case HIT_MAIN:
         g_running ? engine_stop() : engine_start();
+        break;
+    case HIT_UPDATE:
+        update_install();
         break;
     case HIT_AUTOSTART:
         autostart_set(!g_autostart);
@@ -777,6 +984,27 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         else if (LOWORD(lp) == WM_RBUTTONUP)
             show_context_menu();
         return 0;
+    case WM_KITE_UPDATE:
+        if (wp == UPD_AVAILABLE && g_upd_state != UPD_AVAILABLE) {
+            g_upd_state = UPD_AVAILABLE;
+            wchar_t text[128];
+            swprintf(text, 128, L"Kite DPI %ls hazır. Kurmak için sağ alttaki simgeye tıkla.", g_upd_version);
+            tray_notify(L"Güncelleme var", text);
+        } else if (wp == UPD_INSTALLING) {
+            update_relaunch();
+            return 0;
+        } else if (wp == UPD_FAILED) {
+            g_upd_state = UPD_FAILED;
+            tray_notify(L"Güncelleme kurulamadı",
+                        L"Yeni sürümü github.com/bkrdmrcioglu/Kite adresinden indirebilirsin.");
+        }
+        if (IsWindowVisible(g_panel))
+            panel_show(); /* resize for the update row */
+        return 0;
+    case WM_TIMER:
+        if (wp == UPDATE_TIMER)
+            update_check();
+        return 0;
     case WM_COMMAND:
         switch (LOWORD(wp)) {
         case ID_OPEN: panel_show(); break;
@@ -808,8 +1036,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     if (wcsstr(cmd, L"--hosts-remove"))
         return hosts_write(0);
 
+    int after_update = wcsstr(cmd, L"--after-update") != NULL;
     HANDLE mutex = CreateMutexW(NULL, TRUE, L"Local\\KiteTray");
-    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+    /* started by the updater: wait for the old version to exit */
+    if (GetLastError() == ERROR_ALREADY_EXISTS && after_update)
+        WaitForSingleObject(mutex, 15000);
+    else if (GetLastError() == ERROR_ALREADY_EXISTS) {
         /* already running: ask that instance to open its panel */
         HWND other = FindWindowW(L"KiteTrayWindow", NULL);
         if (other)
@@ -819,6 +1051,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
 
     /* repair settings left behind by a crash or forced kill */
     proxy_restore();
+
+    /* remove the previous exe left by an update */
+    wchar_t old_exe[MAX_PATH + 8], self_exe[MAX_PATH];
+    GetModuleFileNameW(NULL, self_exe, MAX_PATH);
+    swprintf(old_exe, MAX_PATH + 8, L"%ls.old", self_exe);
+    DeleteFileW(old_exe);
 
     ULONG_PTR gdip_token;
     GdiplusStartupInput gsi = { 1, NULL, FALSE, FALSE };
@@ -849,8 +1087,15 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
         if (ok && hosts_elevated(1) != 0)
             tray_notify(L"Kite DPI", L"İzin verilmedi. Uygulamalar için destek bir sonraki açılışta tekrar sorulacak.");
     }
-    if (g_running && !autostart)
+    if (after_update) {
+        wchar_t text[96];
+        swprintf(text, 96, L"Kite DPI %hs sürümüne güncellendi.", kite_version());
+        tray_notify(L"Güncelleme tamamlandı", text);
+    } else if (g_running && !autostart) {
         tray_notify(L"Kite DPI çalışıyor", L"Engelli siteler artık açılıyor. Ayarlar için sağ alttaki simgeye tıkla.");
+    }
+    update_check();
+    SetTimer(g_hwnd, UPDATE_TIMER, 6 * 60 * 60 * 1000, NULL);
 
     MSG msg;
     while (GetMessageW(&msg, NULL, 0, 0) > 0) {
