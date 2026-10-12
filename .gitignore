@@ -6,3 +6,5 @@ apple/Kite.xcodeproj/
 xcuserdata/
 *.xcuserstate
 __pycache__/
+# signing keys never belong in the repo
+*.p8
