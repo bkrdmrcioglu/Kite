@@ -51,56 +51,129 @@ struct MenuView: View {
     @EnvironmentObject var engine: Engine
     @Environment(\.openWindow) private var openWindow
 
+    private let green = Color(red: 0.13, green: 0.77, blue: 0.37)
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                Image(systemName: engine.running ? "bolt.shield.fill" : "bolt.shield")
-                    .font(.system(size: 28))
-                    .foregroundStyle(engine.running ? .green : .secondary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Kite DPI").font(.headline)
-                    Text(engine.running ? "Açık · \(engine.stats.desynced) bağlantı korundu" : "Kapalı")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Toggle("", isOn: Binding(get: { engine.running }, set: { _ in engine.toggle() }))
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-            }
+        VStack(spacing: 12) {
+            header
+            statusCard
 
             if let err = engine.lastError {
-                Text(err).font(.caption).foregroundStyle(.red)
+                Text(err)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             UpdateBanner()
 
-            Divider()
+            Toggle(isOn: $engine.launchAtLogin) {
+                Label("Mac açılınca başlat", systemImage: "power.circle")
+            }
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .tint(green)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
 
-            Toggle("Mac açılınca başlat", isOn: $engine.launchAtLogin)
-                .toggleStyle(.checkbox)
-
-            Button("Güncellemeleri kontrol et") { Updater.shared.checkNow() }
-                .buttonStyle(.link)
-                .font(.caption)
-
-            HStack {
-                Spacer()
-                Button("Pencereyi aç") {
+            HStack(spacing: 8) {
+                footerButton("Pencere", "macwindow") {
                     openWindow(id: "main")
                     NSApp.activate()
                 }
-                .controlSize(.small)
-                Button("Çıkış") { NSApp.terminate(nil) }
-                    .controlSize(.small)
+                footerButton("Güncellemeler", "arrow.triangle.2.circlepath") {
+                    Updater.shared.checkNow()
+                }
+                footerButton("Çıkış", "xmark.circle") {
+                    NSApp.terminate(nil)
+                }
             }
 
             Text(Updater.credit)
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, alignment: .center)
         }
-        .padding(16)
-        .frame(width: 280)
+        .padding(14)
+        .frame(width: 300)
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(engine.running
+                          ? LinearGradient(colors: [green.opacity(0.9), green], startPoint: .top, endPoint: .bottom)
+                          : LinearGradient(colors: [.gray.opacity(0.5), .gray.opacity(0.35)], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 36, height: 36)
+                Image(systemName: "bolt.shield.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Kite DPI").font(.headline)
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(engine.running ? green : Color.secondary)
+                        .frame(width: 7, height: 7)
+                    Text(engine.running ? "Açık" : "Kapalı")
+                        .font(.caption)
+                        .foregroundStyle(engine.running ? green : .secondary)
+                }
+            }
+            Spacer()
+            Toggle("", isOn: Binding(get: { engine.running }, set: { _ in engine.toggle() }))
+                .toggleStyle(.switch)
+                .tint(green)
+                .labelsHidden()
+        }
+    }
+
+    private var statusCard: some View {
+        HStack(spacing: 0) {
+            if engine.running {
+                stat("Korunan bağlantı", "\(engine.stats.desynced)")
+                Divider().frame(height: 28).overlay(Color.white.opacity(0.1))
+                stat("İndirilen", ByteCountFormatter.string(fromByteCount: Int64(engine.stats.bytes_down), countStyle: .binary))
+            } else {
+                VStack(spacing: 3) {
+                    Text("Engel aşma kapalı").font(.callout.weight(.semibold))
+                    Text("Açmak için sağ üstteki anahtarı kullan.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.vertical, 11)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(engine.running ? green.opacity(0.10) : Color.white.opacity(0.06))
+        )
+        .animation(.easeInOut(duration: 0.25), value: engine.running)
+    }
+
+    private func stat(_ label: String, _ value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.title3.weight(.semibold).monospacedDigit())
+                .contentTransition(.numericText())
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func footerButton(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 14))
+                Text(title).font(.caption2)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 9))
+            .contentShape(RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(.plain)
     }
 }
