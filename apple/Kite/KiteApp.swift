@@ -20,7 +20,7 @@ struct KiteApp: App {
     @StateObject private var engine = Engine.shared
 
     var body: some Scene {
-        Window("Kite", id: "main") {
+        Window("Kite DPI", id: "main") {
             MainWindow()
                 .environmentObject(engine)
                 // show in the Dock only while the window is open
@@ -51,7 +51,7 @@ struct MenuView: View {
                     .font(.system(size: 28))
                     .foregroundStyle(engine.running ? .green : .secondary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Kite").font(.headline)
+                    Text("Kite DPI").font(.headline)
                     Text(engine.running ? "Açık · engeller aşılıyor" : "Kapalı")
                         .font(.caption)
                         .foregroundStyle(.secondary)

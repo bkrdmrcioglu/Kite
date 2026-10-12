@@ -14,7 +14,7 @@
 #include "internal.h"
 #include "net.h"
 
-#define KITE_VERSION "0.1.0"
+#define KITE_VERSION "0.1.1"
 #define BUF_SIZE 65536
 #define HELLO_MAX (16384 + 5 + 4096)
 #define IDLE_TIMEOUT_MS (10 * 60 * 1000)

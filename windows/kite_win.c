@@ -307,7 +307,7 @@ static void tray_update(void)
     LoadIconMetric(GetModuleHandleW(NULL), MAKEINTRESOURCEW(g_running ? IDI_KITE_ON : IDI_KITE_OFF),
                    LIM_SMALL, &icon);
     g_nid.hIcon = icon;
-    wcscpy(g_nid.szTip, g_running ? L"Kite – Açık" : L"Kite – Kapalı");
+    wcscpy(g_nid.szTip, g_running ? L"Kite DPI – Açık" : L"Kite DPI – Kapalı");
     g_nid.uFlags = NIF_ICON | NIF_TIP;
     Shell_NotifyIconW(NIM_MODIFY, &g_nid);
     if (old)
@@ -322,7 +322,7 @@ static void tray_add(void)
     g_nid.uID = 1;
     g_nid.uFlags = NIF_MESSAGE | NIF_TIP;
     g_nid.uCallbackMessage = WM_TRAY;
-    wcscpy(g_nid.szTip, L"Kite");
+    wcscpy(g_nid.szTip, L"Kite DPI");
     Shell_NotifyIconW(NIM_ADD, &g_nid);
     tray_update();
 }
@@ -347,7 +347,7 @@ static void engine_start(void)
     cfg.listen_port = PROXY_PORT;
     cfg.sni_port = SNI_PORT;
     if (kite_start(&cfg) != 0) {
-        tray_notify(L"Kite başlatılamadı", L"8899 portu başka bir program tarafından kullanılıyor olabilir.");
+        tray_notify(L"Kite DPI başlatılamadı", L"8899 portu başka bir program tarafından kullanılıyor olabilir.");
         return;
     }
     proxy_apply();
@@ -569,7 +569,7 @@ static void paint_panel(HDC target)
     DestroyIcon(icon);
 
     SetBkMode(dc, TRANSPARENT);
-    text_at(dc, f_title, T.ctext, S(72), S(16), S(200), S(24), L"Kite", DT_LEFT | DT_VCENTER);
+    text_at(dc, f_title, T.ctext, S(72), S(16), S(200), S(24), L"Kite DPI", DT_LEFT | DT_VCENTER);
     text_at(dc, f_caption, g_running ? RGB(34, 197, 94) : T.csub, S(72), S(40), S(200), S(20),
             g_running ? L"Açık · engeller aşılıyor" : L"Kapalı · tıkla ve aç", DT_LEFT | DT_VCENTER);
 
@@ -587,7 +587,7 @@ static void paint_panel(HDC target)
             DT_LEFT | DT_VCENTER);
 
     wchar_t ver[48];
-    swprintf(ver, 48, L"Kite %hs", kite_version());
+    swprintf(ver, 48, L"Kite DPI %hs", kite_version());
     text_at(dc, f_caption, T.csub, S(20), S(290), S(160), S(30), ver, DT_LEFT | DT_VCENTER);
     text_at(dc, f_body, T.ctext, S(PANEL_W - 16 - 72), S(290), S(72), S(30), L"Çıkış", DT_CENTER | DT_VCENTER);
 
@@ -751,7 +751,7 @@ static void panel_create(HINSTANCE inst)
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.lpszClassName = L"KitePanel";
     RegisterClassW(&wc);
-    g_panel = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"Kite", WS_POPUP,
+    g_panel = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"Kite DPI", WS_POPUP,
                               0, 0, S(PANEL_W), S(PANEL_H), NULL, NULL, inst, NULL);
     /* Windows 11: rounded corners and a subtle border (ignored on Windows 10) */
     DWORD corner = 2; /* DWMWCP_ROUND */
@@ -763,7 +763,7 @@ static void panel_create(HINSTANCE inst)
 static void show_context_menu(void)
 {
     HMENU m = CreatePopupMenu();
-    AppendMenuW(m, MF_STRING, ID_OPEN, L"Kite'ı aç");
+    AppendMenuW(m, MF_STRING, ID_OPEN, L"Kite DPI'ı aç");
     AppendMenuW(m, MF_STRING | (g_running ? MF_CHECKED : 0), ID_TOGGLE, L"Engelleri aş");
     AppendMenuW(m, MF_SEPARATOR, 0, NULL);
     AppendMenuW(m, MF_STRING, ID_QUIT, L"Çıkış");
@@ -844,13 +844,13 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     wc.hInstance = inst;
     wc.lpszClassName = L"KiteTrayWindow";
     RegisterClassW(&wc);
-    g_hwnd = CreateWindowW(wc.lpszClassName, L"Kite", 0, 0, 0, 0, 0, NULL, NULL, inst, NULL);
+    g_hwnd = CreateWindowW(wc.lpszClassName, L"Kite DPI", 0, 0, 0, 0, 0, NULL, NULL, inst, NULL);
     panel_create(inst);
 
     tray_add();
     engine_start();
     if (g_running && !wcsstr(cmd, L"--autostart"))
-        tray_notify(L"Kite çalışıyor", L"Engelli siteler artık açılıyor. Ayarlar için sağ alttaki simgeye tıkla.");
+        tray_notify(L"Kite DPI çalışıyor", L"Engelli siteler artık açılıyor. Ayarlar için sağ alttaki simgeye tıkla.");
 
     MSG msg;
     while (GetMessageW(&msg, NULL, 0, 0) > 0) {

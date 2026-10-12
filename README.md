@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="windows/icons/kite-256.png" alt="Kite" width="128"/>
+  <img src="windows/icons/kite-256.png" alt="Kite DPI" width="128"/>
 
-  # Kite
+  # Kite DPI
 
   **DPI bypass that runs entirely on your device. No VPN server, no account, no data collection.**
 
@@ -14,14 +14,14 @@
 
 ## Türkçe
 
-Kite, operatörlerin **DPI (Derin Paket İnceleme)** ile yaptığı site engellemelerini aşar. Trafiğin hiçbir sunucuya gitmez; her şey kendi cihazında olur. Engellenen sitenin adı (TLS SNI) bağlantının ilk paketinde görünür. Kite bu paketi DPI'ın okuyamayacağı şekilde yeniden düzenler, gerçek sunucu ise onu normal şekilde okur.
+Kite DPI, operatörlerin **DPI (Derin Paket İnceleme)** ile yaptığı site engellemelerini aşar. Trafiğin hiçbir sunucuya gitmez; her şey kendi cihazında olur. Engellenen sitenin adı (TLS SNI) bağlantının ilk paketinde görünür. Kite DPI bu paketi DPI'ın okuyamayacağı şekilde yeniden düzenler, gerçek sunucu ise onu normal şekilde okur.
 
 ### İndir
 
 | Platform | Dosya |
 |---|---|
-| **macOS** 14+ (Apple Silicon ve Intel) | [Kite-macOS.dmg](https://github.com/bkrdmrcioglu/Kite/releases/latest) ya da `brew install --cask bkrdmrcioglu/tap/kite` |
-| **Windows** 10/11 (x64) | [Kite-Windows-x64.exe](https://github.com/bkrdmrcioglu/Kite/releases/latest) |
+| **macOS** 14+ (Apple Silicon ve Intel) | [Kite-DPI-macOS.dmg](https://github.com/bkrdmrcioglu/Kite/releases/latest) ya da `brew install --cask bkrdmrcioglu/tap/kite-dpi` |
+| **Windows** 10/11 (x64) | [Kite-DPI-Windows-x64.exe](https://github.com/bkrdmrcioglu/Kite/releases/latest) |
 | **iOS** 17+ | Yakında (TestFlight) |
 
 Windows sürümü henüz imzalı değil. SmartScreen uyarısı çıkarsa **Ek bilgi → Yine de çalıştır**'a tıkla.
@@ -31,7 +31,7 @@ Windows sürümü henüz imzalı değil. SmartScreen uyarısı çıkarsa **Ek bi
 1. **Şifreli DNS:** Site adreslerini operatörün zehirli DNS'ini atlayarak TCP üzerinden 1.1.1.1, 8.8.8.8 ve 9.9.9.9'a sorar. Bilinen engel sayfası IP'lerini atar.
 2. **TLS kayıt bölme:** TLS ClientHello'yu site adının ortasından iki ayrı TLS kaydına böler ve ayrı TCP parçaları olarak gönderir. DPI site adını göremez, sunucu kayıtları sorunsuz birleştirir.
 3. **Yerel proxy:** Sistemin proxy ayarını kendine yönlendirir. Kapanınca, çökünce ya da bilgisayar kapanınca eski ayarı geri yükler.
-4. **Discord uygulaması modu (isteğe bağlı):** Proxy ayarına uymayan uygulamalar için Discord alan adlarını hosts dosyasıyla Kite'a yönlendirir. Kite bu bağlantıları 443 portunda karşılar.
+4. **Discord uygulaması modu (isteğe bağlı):** Proxy ayarına uymayan uygulamalar için Discord alan adlarını hosts dosyasıyla Kite'a yönlendirir. Kite DPI bu bağlantıları 443 portunda karşılar.
 
 | Platform | Yöntem |
 |---|---|
@@ -42,24 +42,24 @@ Windows sürümü henüz imzalı değil. SmartScreen uyarısı çıkarsa **Ek bi
 ### Sınırlar
 
 - **Sesli sohbet:** UDP trafiği (örneğin Discord sesli sohbeti) proxy'den geçmediği için kapsanmaz.
-- **IP engeli:** IP adresi üzerinden engellenen siteler açılmaz. Kite yalnızca DNS ve SNI tabanlı engellemeyi aşar.
+- **IP engeli:** IP adresi üzerinden engellenen siteler açılmaz. Kite DPI yalnızca DNS ve SNI tabanlı engellemeyi aşar.
 - **Operatör farkı:** Farklı operatörler farklı DPI kullanır. `tools/discord_test.py` hangi yöntemin senin hattında çalıştığını gösterir.
 
 ### Yasal not
 
-Kite'ı bulunduğun ülkenin yasalarına uygun şekilde kullanmak senin sorumluluğundadır.
+Kite DPI'ı bulunduğun ülkenin yasalarına uygun şekilde kullanmak senin sorumluluğundadır.
 
 ---
 
 ## English
 
-Kite defeats SNI-based **Deep Packet Inspection** censorship without a VPN server. It runs a local proxy that resolves names over TCP DNS (bypassing poisoned ISP resolvers) and splits the TLS ClientHello into two TLS records right inside the hostname, so the DPI never sees the name in one piece while the real server reassembles it normally.
+Kite DPI defeats SNI-based **Deep Packet Inspection** censorship without a VPN server. It runs a local proxy that resolves names over TCP DNS (bypassing poisoned ISP resolvers) and splits the TLS ClientHello into two TLS records right inside the hostname, so the DPI never sees the name in one piece while the real server reassembles it normally.
 
 ### Download
 
 | Platform | |
 |---|---|
-| **macOS** 14+ (universal) | [Releases](https://github.com/bkrdmrcioglu/Kite/releases/latest) or `brew install --cask bkrdmrcioglu/tap/kite` |
+| **macOS** 14+ (universal) | [Releases](https://github.com/bkrdmrcioglu/Kite/releases/latest) or `brew install --cask bkrdmrcioglu/tap/kite-dpi` |
 | **Windows** 10/11 x64 | [Releases](https://github.com/bkrdmrcioglu/Kite/releases/latest) |
 | **iOS** 17+ | Coming soon (TestFlight) |
 
@@ -71,7 +71,7 @@ Kite defeats SNI-based **Deep Packet Inspection** censorship without a VPN serve
 | `bytes` | Sends the hello up to the end of the SNI one byte per segment |
 | `split` | Plain TCP split at the SNI |
 
-On the network Kite was developed against (Turk Telekom), plain TCP split and disorder fail because the DPI reassembles TCP, while `tlsrec` and `bytes` work.
+On the network Kite DPI was developed against (Turk Telekom), plain TCP split and disorder fail because the DPI reassembles TCP, while `tlsrec` and `bytes` work.
 
 ### Project layout
 
@@ -112,7 +112,7 @@ The script opens one TLS connection per strategy and shows which ones get throug
 
 ### Privacy
 
-Kite has no servers, analytics or telemetry. The only connections it makes on its own are DNS-over-TCP queries to public resolvers (1.1.1.1, 1.0.0.1, 8.8.8.8, 9.9.9.9).
+Kite DPI has no servers, analytics or telemetry. The only connections it makes on its own are DNS-over-TCP queries to public resolvers (1.1.1.1, 1.0.0.1, 8.8.8.8, 9.9.9.9).
 
 ### License
 

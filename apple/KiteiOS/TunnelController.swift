@@ -75,7 +75,7 @@ final class TunnelController: ObservableObject {
         proto.providerBundleIdentifier = TunnelShared.providerBundleID
         proto.serverAddress = "Cihaz içi (sunucu yok)"
         m.protocolConfiguration = proto
-        m.localizedDescription = "Kite"
+        m.localizedDescription = "Kite DPI"
         m.isEnabled = true
         try await m.saveToPreferences()
         try await m.loadFromPreferences()

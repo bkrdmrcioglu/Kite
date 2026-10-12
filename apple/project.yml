@@ -6,7 +6,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.0"
+    MARKETING_VERSION: "0.1.1"
     CURRENT_PROJECT_VERSION: "1"
 targets:
   Kite:
@@ -25,7 +25,8 @@ targets:
         GCC_PREPROCESSOR_DEFINITIONS: _DARWIN_C_SOURCE=1
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_LSUIElement: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Kite
+        PRODUCT_NAME: Kite DPI
+        INFOPLIST_KEY_CFBundleDisplayName: Kite DPI
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: YES
@@ -43,16 +44,18 @@ targets:
       - target: KiteTunnel
     settings:
       base:
-        PRODUCT_NAME: Kite
+        PRODUCT_NAME: Kite DPI
         PRODUCT_BUNDLE_IDENTIFIER: com.bkrdmrcioglu.kite.ios
         DEVELOPMENT_TEAM: HLZQLSTBB8
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: KiteiOS/KiteiOS.entitlements
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Kite
+        INFOPLIST_KEY_CFBundleDisplayName: Kite DPI
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
@@ -69,7 +72,7 @@ targets:
     info:
       path: KiteTunnel/Info.plist
       properties:
-        CFBundleDisplayName: Kite Tunnel
+        CFBundleDisplayName: Kite DPI Tunnel
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:

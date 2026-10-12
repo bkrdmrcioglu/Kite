@@ -53,7 +53,7 @@ final class Engine: ObservableObject {
         cfg.listen_port = Self.port
         cfg.sni_port = 443
         if kite_start(&cfg) != 0 {
-            lastError = "Kite başlatılamadı (port \(Self.port) kullanımda)."
+            lastError = "Kite DPI başlatılamadı (port \(Self.port) kullanımda)."
             return
         }
         do {

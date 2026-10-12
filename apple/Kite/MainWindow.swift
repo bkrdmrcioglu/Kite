@@ -52,7 +52,7 @@ struct MainWindow: View {
             Image(systemName: "bolt.shield.fill")
                 .font(.title2)
                 .foregroundStyle(engine.running ? green : .secondary)
-            Text("Kite").font(.title2.weight(.bold))
+            Text("Kite DPI").font(.title2.weight(.bold))
             Spacer()
             Text("v\(String(cString: kite_version()))")
                 .font(.caption)
@@ -81,7 +81,7 @@ struct MainWindow: View {
         .buttonStyle(PressableStyle())
         .keyboardShortcut(.space, modifiers: [])
         .animation(.spring(duration: 0.4), value: engine.running)
-        .help(engine.running ? "Kite'ı kapat" : "Kite'ı aç")
+        .help(engine.running ? "Kite DPI'ı kapat" : "Kite DPI'ı aç")
     }
 
     private var statusText: some View {
@@ -122,7 +122,7 @@ struct MainWindow: View {
         VStack(spacing: 0) {
             settingRow(
                 "Mac açılınca başlat",
-                "Oturum açınca Kite arka planda çalışır.",
+                "Oturum açınca Kite DPI arka planda çalışır.",
                 isOn: $engine.launchAtLogin
             )
             Divider().overlay(Color.white.opacity(0.08)).padding(.leading, 14)

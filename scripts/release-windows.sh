@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Cross-compiles Kite for Windows (x64) and zips it. Needs: brew install mingw-w64
+# Cross-compiles Kite DPI for Windows (x64). Needs: brew install mingw-w64
 #
-#   scripts/release-windows.sh 0.1.0
+#   scripts/release-windows.sh 0.1.1
 set -euo pipefail
 VERSION=${1:?usage: release-windows.sh <version>}
 cd "$(dirname "$0")/.."
-rm -f build/win/kite_res.o
+rm -f build/win/kite_res.o build/win/Kite.exe
 make windows
-mkdir -p dist
-cp build/win/Kite.exe "dist/Kite-$VERSION-Windows-x64.exe"
-(cd build/win && zip -q "../../dist/Kite-$VERSION-Windows-x64.zip" Kite.exe)
-shasum -a 256 dist/Kite-"$VERSION"-Windows-x64.*
+mkdir -p dist build/win/zip
+cp build/win/Kite.exe "dist/Kite-DPI-$VERSION-Windows-x64.exe"
+cp build/win/Kite.exe "build/win/zip/Kite DPI.exe"
+rm -f "dist/Kite-DPI-$VERSION-Windows-x64.zip"
+(cd build/win/zip && zip -q "../../../dist/Kite-DPI-$VERSION-Windows-x64.zip" "Kite DPI.exe")
+shasum -a 256 dist/Kite-DPI-"$VERSION"-Windows-x64.*

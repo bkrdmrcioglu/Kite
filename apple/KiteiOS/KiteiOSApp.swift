@@ -67,7 +67,7 @@ struct ContentView: View {
             Image(systemName: "bolt.shield.fill")
                 .font(.title2)
                 .foregroundStyle(tunnel.isOn ? green : .secondary)
-            Text("Kite").font(.title2.weight(.bold))
+            Text("Kite DPI").font(.title2.weight(.bold))
             Spacer()
         }
         .padding(.top, 8)
@@ -100,7 +100,7 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .animation(.spring(duration: 0.4), value: tunnel.status)
-        .accessibilityLabel(tunnel.isOn ? "Kite'ı kapat" : "Kite'ı aç")
+        .accessibilityLabel(tunnel.isOn ? "Kite DPI'ı kapat" : "Kite DPI'ı aç")
     }
 
     private var statusText: some View {
@@ -152,7 +152,7 @@ struct ContentView: View {
         Toggle(isOn: Binding(get: { tunnel.alwaysOn }, set: { on in Task { await tunnel.setAlwaysOn(on) } })) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Her zaman açık")
-                Text("Telefon yeniden başlasa da Kite kendiliğinden açılır.")
+                Text("Telefon yeniden başlasa da Kite DPI kendiliğinden açılır.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

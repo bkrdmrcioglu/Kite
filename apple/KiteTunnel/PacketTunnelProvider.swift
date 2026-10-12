@@ -11,7 +11,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         cfg.listen_port = TunnelShared.proxyPort
         if kite_start(&cfg) != 0 {
             completionHandler(NSError(domain: "Kite", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Kite motoru başlatılamadı.",
+                NSLocalizedDescriptionKey: "Kite DPI motoru başlatılamadı.",
             ]))
             return
         }
