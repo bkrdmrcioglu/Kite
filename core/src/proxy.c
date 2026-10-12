@@ -14,7 +14,7 @@
 #include "internal.h"
 #include "net.h"
 
-#define KITE_VERSION "0.1.2"
+#define KITE_VERSION "0.1.3"
 #define BUF_SIZE 65536
 #define HELLO_MAX (16384 + 5 + 4096)
 #define IDLE_TIMEOUT_MS (10 * 60 * 1000)
@@ -148,8 +148,58 @@ static int send_desync_http(int fd, uint8_t *buf, size_t len)
     return kite_send_all(fd, buf + cut, len - cut);
 }
 
-/* Reads the client's first payload and forwards it with the desync applied. */
-static int forward_first(int client, int server, const uint8_t *pre, size_t prelen)
+/* ---- hosts that reject the desync ---------------------------------------
+ * A few strict servers (e.g. some load balancers) close the connection when
+ * the ClientHello arrives split across TLS records. Those hosts are not the
+ * ones being censored, so they are remembered and sent the hello unmodified. */
+
+#define PLAIN_HOSTS 256
+static char plain_hosts[PLAIN_HOSTS][256];
+static pthread_mutex_t plain_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static unsigned host_slot(const char *h)
+{
+    unsigned x = 5381;
+    while (*h)
+        x = x * 33 + (unsigned char)*h++;
+    return x % PLAIN_HOSTS;
+}
+
+static int host_is_plain(const char *host)
+{
+    if (!host || strlen(host) >= 256)
+        return 0;
+    pthread_mutex_lock(&plain_lock);
+    int hit = strcmp(plain_hosts[host_slot(host)], host) == 0;
+    pthread_mutex_unlock(&plain_lock);
+    return hit;
+}
+
+static void host_mark_plain(const char *host)
+{
+    if (!host || strlen(host) >= 256)
+        return;
+    pthread_mutex_lock(&plain_lock);
+    strcpy(plain_hosts[host_slot(host)], host);
+    pthread_mutex_unlock(&plain_lock);
+}
+
+/* True when the server closed or reset the connection before answering.
+ * A TLS server always replies to a ClientHello, so silence is not rejection. */
+static int server_rejected(int fd)
+{
+    struct pollfd p = { .fd = fd, .events = POLLIN };
+    if (poll(&p, 1, 5000) != 1)
+        return 0;
+    char c;
+    return recv(fd, &c, 1, MSG_PEEK) <= 0;
+}
+
+/* Reads the client's first payload and forwards it with the desync applied.
+ * If the server rejects the reshaped hello, reconnects and sends it as is;
+ * *server is replaced in that case (and is -1 if reconnecting failed). */
+static int forward_first(int client, int *server, const char *host, uint16_t port,
+                         const uint8_t *pre, size_t prelen)
 {
     uint8_t *buf = malloc(HELLO_MAX);
     if (!buf)
@@ -189,15 +239,26 @@ static int forward_first(int client, int server, const uint8_t *pre, size_t prel
                 break;
             len += (size_t)n;
         }
-        if (g_cfg.strategy != KITE_STRATEGY_NONE)
-            kite_stat_add(&g_stats.desynced, 1);
-        rc = send_desync_tls(server, buf, len);
+        if (g_cfg.strategy == KITE_STRATEGY_NONE || host_is_plain(host)) {
+            rc = kite_send_all(*server, buf, len);
+        } else {
+            rc = send_desync_tls(*server, buf, len);
+            if (rc == 0 && host && server_rejected(*server)) {
+                kite_log("%s rejected the desync, retrying unmodified", host);
+                host_mark_plain(host);
+                sock_close(*server);
+                *server = connect_host(host, port);
+                rc = *server >= 0 ? kite_send_all(*server, buf, len) : -1;
+            } else if (rc == 0) {
+                kite_stat_add(&g_stats.desynced, 1);
+            }
+        }
     } else if (kite_is_http_request(buf, len)) {
         if (g_cfg.strategy != KITE_STRATEGY_NONE)
             kite_stat_add(&g_stats.desynced, 1);
-        rc = send_desync_http(server, buf, len);
+        rc = send_desync_http(*server, buf, len);
     } else {
-        rc = kite_send_all(server, buf, len);
+        rc = kite_send_all(*server, buf, len);
     }
     kite_stat_add(&g_stats.bytes_up, len);
     free(buf);
@@ -314,7 +375,7 @@ static int handle_socks5(int client, uint8_t *buf, size_t len)
     if (server < 0)
         return -1;
     kite_log("socks %s:%u", host, port);
-    if (forward_first(client, server, NULL, 0) == 0)
+    if (forward_first(client, &server, host, port, NULL, 0) == 0)
         relay(client, server);
     sock_close(server);
     return 0;
@@ -359,7 +420,7 @@ static int handle_http(int client, uint8_t *buf, size_t len, size_t cap)
         kite_send_all(client, (const uint8_t *)okmsg, strlen(okmsg));
         kite_log("connect %s:%u", host, port);
         size_t extra = len - (size_t)((uint8_t *)hdr_end - buf);
-        if (forward_first(client, server, (uint8_t *)hdr_end, extra) == 0)
+        if (forward_first(client, &server, host, port, (uint8_t *)hdr_end, extra) == 0)
             relay(client, server);
         sock_close(server);
         return 0;
@@ -391,7 +452,7 @@ static int handle_http(int client, uint8_t *buf, size_t len, size_t cap)
     }
     memcpy(req, buf, mlen);
     memcpy(req + mlen, path, rest);
-    if (forward_first(client, server, req, mlen + rest) == 0)
+    if (forward_first(client, &server, host, port, req, mlen + rest) == 0)
         relay(client, server);
     free(req);
     sock_close(server);
@@ -423,7 +484,7 @@ static int handle_sni(int client, uint8_t *buf, size_t len, size_t cap)
     if (server < 0)
         return -1;
     kite_log("sni %s", host);
-    if (forward_first(client, server, buf, len) == 0)
+    if (forward_first(client, &server, host, 443, buf, len) == 0)
         relay(client, server);
     sock_close(server);
     return 0;
