@@ -26,9 +26,11 @@
 #define WM_TRAY (WM_APP + 1)
 #define WM_KITE_UPDATE (WM_APP + 2)
 #define UPDATE_TIMER 2
+#define CHECK_RESULT_TIMER 3
 #define ID_OPEN 1000
 #define ID_TOGGLE 1001
 #define ID_QUIT 1004
+#define ID_CHECK 1005
 #define IDI_KITE_ON 1
 #define IDI_KITE_OFF 2
 
@@ -379,7 +381,12 @@ static void engine_stop(void)
  * it with --after-update and quits; the new instance waits for our mutex. */
 
 enum { UPD_NONE, UPD_AVAILABLE, UPD_INSTALLING, UPD_FAILED };
+/* results of a check the user started from the panel */
+enum { CHECK_IDLE, CHECK_RUNNING, CHECK_UP_TO_DATE, CHECK_FAILED };
+#define UPD_MSG_UP_TO_DATE 10
+#define UPD_MSG_CHECK_FAILED 11
 static int g_upd_state;
+static int g_check_state;
 static wchar_t g_upd_version[32];
 static char g_upd_url[512];
 
@@ -455,10 +462,14 @@ static int json_string_after(const char *json, const char *from, const char *key
 
 static DWORD WINAPI update_check_thread(void *arg)
 {
-    (void)arg;
+    int manual = arg != NULL;
     char *json = http_get("https://api.github.com/repos/bkrdmrcioglu/Kite/releases/latest", NULL, NULL);
-    if (!json)
+    if (!json) {
+        if (manual)
+            PostMessageW(g_hwnd, WM_KITE_UPDATE, UPD_MSG_CHECK_FAILED, 0);
         return 0;
+    }
+    int found = 0;
     char tag[32], url[512];
     const char *exe = strstr(json, "-Windows-x64.exe\"");
     if (json_string_after(json, NULL, "\"tag_name\"", tag, sizeof(tag)) && exe) {
@@ -472,17 +483,21 @@ static DWORD WINAPI update_check_thread(void *arg)
             strcpy(g_upd_url, url);
             swprintf(g_upd_version, 32, L"%hs", v);
             PostMessageW(g_hwnd, WM_KITE_UPDATE, UPD_AVAILABLE, 0);
+            found = 1;
         }
     }
+    if (manual && !found)
+        PostMessageW(g_hwnd, WM_KITE_UPDATE, UPD_MSG_UP_TO_DATE, 0);
     free(json);
     return 0;
 }
 
-static void update_check(void)
+/* manual: started from "Güncellemeleri kontrol et", so report the result */
+static void update_check(int manual)
 {
     if (g_upd_state == UPD_INSTALLING)
         return;
-    HANDLE t = CreateThread(NULL, 0, update_check_thread, NULL, 0, NULL);
+    HANDLE t = CreateThread(NULL, 0, update_check_thread, manual ? (void *)1 : NULL, 0, NULL);
     if (t)
         CloseHandle(t);
 }
@@ -547,7 +562,7 @@ static void update_relaunch(void)
 
 /* ---- flyout panel ------------------------------------------------------- */
 
-enum { HIT_NONE, HIT_MAIN, HIT_AUTOSTART, HIT_UPDATE, HIT_QUIT };
+enum { HIT_NONE, HIT_MAIN, HIT_AUTOSTART, HIT_UPDATE, HIT_CHECK, HIT_QUIT };
 
 typedef struct {
     ARGB bg, card, hover, text, sub, line, track_off, knob_off, accent;
@@ -561,10 +576,10 @@ static int g_hover;
 static int g_autostart;   /* cached, refreshed on open */
 static DWORD g_hidden_at;
 static HFONT f_title, f_body, f_caption, f_big;
-static RECT hit_rects[5];
+static RECT hit_rects[6];
 
 #define PANEL_W 360
-#define PANEL_H 274
+#define PANEL_H 300
 #define S(x) MulDiv((x), g_dpi, 96)
 
 static int system_dark(void)
@@ -748,6 +763,9 @@ static void paint_panel(HDC target)
     /* footer */
     GdipDrawLineI(g, pen, 0, S(226 + u), W, S(226 + u));
     GdipDeletePen(pen);
+    set_hit(HIT_CHECK, 12, 234 + u, 200, 30);
+    if (g_hover == HIT_CHECK && g_check_state == CHECK_IDLE)
+        fill_round(g, T.hover, (REAL)S(12), (REAL)S(234 + u), (REAL)S(200), (REAL)S(30), (REAL)S(5));
     set_hit(HIT_QUIT, PANEL_W - 16 - 72, 234 + u, 72, 30);
     fill_round(g, g_hover == HIT_QUIT ? T.hover : T.card, (REAL)S(PANEL_W - 16 - 72), (REAL)S(234 + u),
                (REAL)S(72), (REAL)S(30), (REAL)S(5));
@@ -762,6 +780,9 @@ static void paint_panel(HDC target)
 
     SetBkMode(dc, TRANSPARENT);
     text_at(dc, f_title, T.ctext, S(72), S(16), S(200), S(24), L"Kite DPI", DT_LEFT | DT_VCENTER);
+    wchar_t ver[24];
+    swprintf(ver, 24, L"v%hs", kite_version());
+    text_at(dc, f_caption, T.csub, S(152), S(19), S(80), S(20), ver, DT_LEFT | DT_VCENTER);
     text_at(dc, f_caption, g_running ? RGB(34, 197, 94) : T.csub, S(72), S(40), S(200), S(20),
             g_running ? L"Açık · engeller aşılıyor" : L"Kapalı · tıkla ve aç", DT_LEFT | DT_VCENTER);
 
@@ -789,10 +810,16 @@ static void paint_panel(HDC target)
 
     text_at(dc, f_body, T.ctext, S(20), S(172 + u), S(260), S(44), L"Windows açılınca başlat", DT_LEFT | DT_VCENTER);
 
-    wchar_t ver[48];
-    swprintf(ver, 48, L"Kite DPI %hs", kite_version());
-    text_at(dc, f_caption, T.csub, S(20), S(234 + u), S(160), S(30), ver, DT_LEFT | DT_VCENTER);
+    const wchar_t *check = g_check_state == CHECK_RUNNING    ? L"Kontrol ediliyor…"
+                         : g_check_state == CHECK_UP_TO_DATE ? L"✓ Kite DPI güncel"
+                         : g_check_state == CHECK_FAILED     ? L"Kontrol edilemedi"
+                                                             : L"Güncellemeleri kontrol et";
+    COLORREF link = g_check_state == CHECK_IDLE ? RGB(59, 130, 246)
+                  : g_check_state == CHECK_UP_TO_DATE ? RGB(34, 197, 94) : T.csub;
+    text_at(dc, f_body, link, S(20), S(234 + u), S(190), S(30), check, DT_LEFT | DT_VCENTER);
     text_at(dc, f_body, T.ctext, S(PANEL_W - 16 - 72), S(234 + u), S(72), S(30), L"Çıkış", DT_CENTER | DT_VCENTER);
+    text_at(dc, f_caption, T.csub, 0, S(270 + u), W, S(22), L"Bekir Demircioğlu tarafından sevgiyle geliştirildi",
+            DT_CENTER | DT_VCENTER);
 
     BitBlt(target, 0, 0, W, H, dc, 0, 0, SRCCOPY);
     SelectObject(dc, oldbmp);
@@ -870,6 +897,12 @@ static void panel_click(int hit)
         break;
     case HIT_UPDATE:
         update_install();
+        break;
+    case HIT_CHECK:
+        if (g_check_state != CHECK_RUNNING) {
+            g_check_state = CHECK_RUNNING;
+            update_check(1);
+        }
         break;
     case HIT_AUTOSTART:
         autostart_set(!g_autostart);
@@ -960,6 +993,7 @@ static void show_context_menu(void)
     HMENU m = CreatePopupMenu();
     AppendMenuW(m, MF_STRING, ID_OPEN, L"Kite DPI'ı aç");
     AppendMenuW(m, MF_STRING | (g_running ? MF_CHECKED : 0), ID_TOGGLE, L"Engelleri aş");
+    AppendMenuW(m, MF_STRING, ID_CHECK, L"Güncellemeleri kontrol et");
     AppendMenuW(m, MF_SEPARATOR, 0, NULL);
     AppendMenuW(m, MF_STRING, ID_QUIT, L"Çıkış");
     SetMenuDefaultItem(m, ID_OPEN, FALSE);
@@ -985,6 +1019,21 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
             show_context_menu();
         return 0;
     case WM_KITE_UPDATE:
+        if (wp == UPD_MSG_UP_TO_DATE || wp == UPD_MSG_CHECK_FAILED) {
+            g_check_state = wp == UPD_MSG_UP_TO_DATE ? CHECK_UP_TO_DATE : CHECK_FAILED;
+            SetTimer(h, CHECK_RESULT_TIMER, 6000, NULL);
+            if (!IsWindowVisible(g_panel)) {
+                wchar_t text[96];
+                swprintf(text, 96, L"En son sürümü kullanıyorsun (%hs).", kite_version());
+                if (wp == UPD_MSG_UP_TO_DATE)
+                    tray_notify(L"Kite DPI güncel", text);
+                else
+                    tray_notify(L"Güncellemeler kontrol edilemedi", L"İnternet bağlantını kontrol et.");
+            }
+            InvalidateRect(g_panel, NULL, FALSE);
+            return 0;
+        }
+        g_check_state = CHECK_IDLE;
         if (wp == UPD_AVAILABLE && g_upd_state != UPD_AVAILABLE) {
             g_upd_state = UPD_AVAILABLE;
             wchar_t text[128];
@@ -1002,12 +1051,21 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
             panel_show(); /* resize for the update row */
         return 0;
     case WM_TIMER:
-        if (wp == UPDATE_TIMER)
-            update_check();
+        if (wp == UPDATE_TIMER) {
+            update_check(0);
+        } else if (wp == CHECK_RESULT_TIMER) {
+            KillTimer(h, CHECK_RESULT_TIMER);
+            g_check_state = CHECK_IDLE;
+            InvalidateRect(g_panel, NULL, FALSE);
+        }
         return 0;
     case WM_COMMAND:
         switch (LOWORD(wp)) {
         case ID_OPEN: panel_show(); break;
+        case ID_CHECK:
+            g_check_state = CHECK_RUNNING;
+            update_check(1);
+            break;
         case ID_TOGGLE: g_running ? engine_stop() : engine_start(); break;
         case ID_QUIT: DestroyWindow(h); break;
         }
@@ -1094,7 +1152,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     } else if (g_running && !autostart) {
         tray_notify(L"Kite DPI çalışıyor", L"Engelli siteler artık açılıyor. Ayarlar için sağ alttaki simgeye tıkla.");
     }
-    update_check();
+    update_check(0);
     SetTimer(g_hwnd, UPDATE_TIMER, 6 * 60 * 60 * 1000, NULL);
 
     MSG msg;

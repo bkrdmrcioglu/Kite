@@ -28,12 +28,14 @@ struct MainWindow: View {
                         .multilineTextAlignment(.center)
                         .padding(.top, 10)
                 }
+                footer
+                    .padding(.top, 14)
             }
             .padding(.horizontal, 22)
             .padding(.top, 34) // clears the hidden title bar's traffic lights
             .padding(.bottom, 20)
         }
-        .frame(width: 380, height: 600)
+        .frame(width: 380, height: 640)
         .preferredColorScheme(.dark)
     }
 
@@ -96,6 +98,17 @@ struct MainWindow: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+        }
+    }
+
+    private var footer: some View {
+        VStack(spacing: 6) {
+            Button("Güncellemeleri kontrol et") { Updater.shared.checkNow() }
+                .buttonStyle(.link)
+                .font(.caption)
+            Text(Updater.credit)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
     }
 

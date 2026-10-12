@@ -7,6 +7,8 @@
 
   macOS · iOS · Windows
 
+  Bekir Demircioğlu tarafından sevgiyle geliştirildi · Made with care by Bekir Demircioğlu
+
   [Türkçe](#türkçe) · [English](#english)
 </div>
 

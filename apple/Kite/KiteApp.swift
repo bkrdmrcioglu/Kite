@@ -80,6 +80,10 @@ struct MenuView: View {
             Toggle("Mac açılınca başlat", isOn: $engine.launchAtLogin)
                 .toggleStyle(.checkbox)
 
+            Button("Güncellemeleri kontrol et") { Updater.shared.checkNow() }
+                .buttonStyle(.link)
+                .font(.caption)
+
             HStack {
                 Spacer()
                 Button("Pencereyi aç") {
@@ -90,6 +94,11 @@ struct MenuView: View {
                 Button("Çıkış") { NSApp.terminate(nil) }
                     .controlSize(.small)
             }
+
+            Text(Updater.credit)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(16)
         .frame(width: 280)

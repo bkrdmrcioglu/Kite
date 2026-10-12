@@ -12,6 +12,8 @@ final class Updater: ObservableObject {
 
     enum State: Equatable {
         case idle
+        case checking
+        case upToDate
         case available(version: String)
         case installing
         case failed(String)
@@ -35,8 +37,29 @@ final class Updater: ObservableObject {
         }
     }
 
-    func check() async {
-        guard state != .installing else { return }
+    static let credit = "Bekir Demircioğlu tarafından sevgiyle geliştirildi"
+
+    /// "Güncellemeleri kontrol et": same check, but reports "up to date"
+    /// and network errors instead of staying silent.
+    func checkNow() {
+        guard state != .installing, state != .checking else { return }
+        state = .checking
+        Task {
+            let found = await check()
+            if case .available = state { return }
+            state = found == nil ? .failed("Güncellemeler kontrol edilemedi. İnternet bağlantını kontrol et.") : .upToDate
+            // let the result fade back to the plain button after a while
+            try? await Task.sleep(for: .seconds(6))
+            if state == .upToDate || state == .failed("Güncellemeler kontrol edilemedi. İnternet bağlantını kontrol et.") {
+                state = .idle
+            }
+        }
+    }
+
+    /// Returns the latest released version, or nil if GitHub could not be reached.
+    @discardableResult
+    func check() async -> String? {
+        guard state != .installing else { return nil }
         struct Release: Decodable {
             struct Asset: Decodable {
                 let name: String
@@ -48,12 +71,13 @@ final class Updater: ObservableObject {
         var request = URLRequest(url: Self.latestURL)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         guard let (data, _) = try? await URLSession.shared.data(for: request),
-              let release = try? JSONDecoder().decode(Release.self, from: data) else { return }
+              let release = try? JSONDecoder().decode(Release.self, from: data) else { return nil }
         let latest = release.tag_name.trimmingCharacters(in: CharacterSet(charactersIn: "v"))
         guard Self.isNewer(latest, than: currentVersion),
-              let dmg = release.assets.first(where: { $0.name.hasSuffix("-macOS.dmg") }) else { return }
+              let dmg = release.assets.first(where: { $0.name.hasSuffix("-macOS.dmg") }) else { return latest }
         dmgURL = dmg.browser_download_url
         state = .available(version: latest)
+        return latest
     }
 
     func install() {
@@ -155,6 +179,22 @@ struct UpdateBanner: View {
         switch updater.state {
         case .idle:
             EmptyView()
+        case .checking:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Güncellemeler kontrol ediliyor…").font(.callout)
+                Spacer()
+            }
+            .padding(10)
+            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+        case .upToDate:
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text("Kite DPI güncel · sürüm \(updater.currentVersion)").font(.callout)
+                Spacer()
+            }
+            .padding(10)
+            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
         case .available(let version):
             HStack {
                 Image(systemName: "arrow.down.circle.fill").foregroundStyle(.blue)

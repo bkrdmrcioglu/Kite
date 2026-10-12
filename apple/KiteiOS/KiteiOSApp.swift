@@ -40,6 +40,10 @@ struct ContentView: View {
                         .multilineTextAlignment(.center)
                         .padding(.top, 10)
                 }
+                Text("Bekir Demircioğlu tarafından sevgiyle geliştirildi")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 12)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
