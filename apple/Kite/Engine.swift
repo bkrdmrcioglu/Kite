@@ -13,6 +13,7 @@ final class Engine: ObservableObject {
 
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled {
         didSet {
+            guard launchAtLogin != oldValue else { return }
             do {
                 if launchAtLogin { try SMAppService.mainApp.register() }
                 else { try SMAppService.mainApp.unregister() }

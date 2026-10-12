@@ -67,12 +67,15 @@ struct MenuView: View {
 
             UpdateBanner()
 
-            Toggle(isOn: $engine.launchAtLogin) {
+            HStack {
                 Label("Mac açılınca başlat", systemImage: "power.circle")
+                Spacer()
+                Toggle("", isOn: $engine.launchAtLogin)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .tint(green)
+                    .labelsHidden()
             }
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            .tint(green)
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
@@ -122,7 +125,9 @@ struct MenuView: View {
                 }
             }
             Spacer()
-            Toggle("", isOn: Binding(get: { engine.running }, set: { _ in engine.toggle() }))
+            // set the state rather than flip it: SwiftUI may write the
+            // current value back when the panel opens
+            Toggle("", isOn: Binding(get: { engine.running }, set: { $0 ? engine.start() : engine.stop() }))
                 .toggleStyle(.switch)
                 .tint(green)
                 .labelsHidden()

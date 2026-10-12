@@ -1,7 +1,7 @@
 # Homebrew cask for the bkrdmrcioglu/homebrew-tap repository.
 #   brew install --cask bkrdmrcioglu/tap/kite-dpi
 cask "kite-dpi" do
-  version "0.1.5"
+  version "0.1.6"
   sha256 "a9d06b51ed31af407ab5f5f18a0ce9d2e2f7aafc33c46a6a13bafc36b82afb2c"
 
   url "https://github.com/bkrdmrcioglu/Kite/releases/download/v#{version}/Kite-DPI-#{version}-macOS.dmg"
