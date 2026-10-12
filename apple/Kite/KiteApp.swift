@@ -1,0 +1,103 @@
+import AppKit
+import SwiftUI
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            Engine.shared.recoverFromCrash()
+            Engine.shared.start()
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated { Engine.shared.stop() }
+    }
+}
+
+@main
+struct KiteApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @StateObject private var engine = Engine.shared
+
+    var body: some Scene {
+        Window("Kite", id: "main") {
+            MainWindow()
+                .environmentObject(engine)
+                // show in the Dock only while the window is open
+                .onAppear { NSApp.setActivationPolicy(.regular) }
+                .onDisappear { NSApp.setActivationPolicy(.accessory) }
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+
+        MenuBarExtra {
+            MenuView()
+                .environmentObject(engine)
+        } label: {
+            Image(systemName: engine.running ? "bolt.shield.fill" : "bolt.shield")
+        }
+        .menuBarExtraStyle(.window)
+    }
+}
+
+struct MenuView: View {
+    @EnvironmentObject var engine: Engine
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: engine.running ? "bolt.shield.fill" : "bolt.shield")
+                    .font(.system(size: 28))
+                    .foregroundStyle(engine.running ? .green : .secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Kite").font(.headline)
+                    Text(engine.running ? "Açık · engeller aşılıyor" : "Kapalı")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Toggle("", isOn: Binding(get: { engine.running }, set: { _ in engine.toggle() }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+
+            if let err = engine.lastError {
+                Text(err).font(.caption).foregroundStyle(.red)
+            }
+
+            Divider()
+
+            Toggle("Mac açılınca başlat", isOn: $engine.launchAtLogin)
+                .toggleStyle(.checkbox)
+
+            Toggle(isOn: Binding(get: { engine.discordApp }, set: { engine.setDiscordApp($0) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Discord uygulaması")
+                    Text("Masaüstü uygulaması için gerekli. Bir kez şifre ister.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.checkbox)
+
+            HStack {
+                if engine.running {
+                    Text("\(engine.stats.desynced) bağlantı korundu")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Pencereyi aç") {
+                    openWindow(id: "main")
+                    NSApp.activate()
+                }
+                .controlSize(.small)
+                Button("Çıkış") { NSApp.terminate(nil) }
+                    .controlSize(.small)
+            }
+        }
+        .padding(16)
+        .frame(width: 280)
+    }
+}
