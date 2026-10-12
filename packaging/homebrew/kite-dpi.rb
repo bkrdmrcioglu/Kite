@@ -14,22 +14,24 @@ cask "kite-dpi" do
 
   app "Kite DPI.app"
 
-  # quitting restores the system proxy settings; the script removes the
-  # /etc/hosts entries Kite DPI adds for apps that ignore the proxy
-  uninstall quit:   "com.bkrdmrcioglu.kite",
-            script: {
-              executable: "/usr/bin/sed",
-              args:       [
-                "-i", "",
-                "-e", "/^# >>> Kite DPI >>>$/,/^# <<< Kite DPI <<<$/d",
-                "-e", "/^# >>> Kite (Discord) >>>$/,/^# <<< Kite (Discord) <<<$/d",
-                "/etc/hosts"
-              ],
-              sudo:       true,
-            }
+  # quitting restores the system proxy settings
+  uninstall quit: "com.bkrdmrcioglu.kite"
 
-  zap trash: [
-    "~/Library/Application Support/Kite",
-    "~/Library/Preferences/com.bkrdmrcioglu.kite.plist",
-  ]
+  # `brew uninstall --zap` also removes the /etc/hosts entries Kite DPI adds
+  # for apps that ignore the proxy. Kept out of `uninstall`, which also runs
+  # on every upgrade and would ask for a password each time.
+  zap script: {
+        executable: "/usr/bin/sed",
+        args:       [
+          "-i", "",
+          "-e", "/^# >>> Kite DPI >>>$/,/^# <<< Kite DPI <<<$/d",
+          "-e", "/^# >>> Kite (Discord) >>>$/,/^# <<< Kite (Discord) <<<$/d",
+          "/etc/hosts"
+        ],
+        sudo:       true,
+      },
+      trash:  [
+        "~/Library/Application Support/Kite",
+        "~/Library/Preferences/com.bkrdmrcioglu.kite.plist",
+      ]
 end
