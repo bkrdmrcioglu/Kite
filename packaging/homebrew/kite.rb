@@ -9,7 +9,7 @@ cask "kite" do
   desc "DPI bypass that runs entirely on your Mac, no VPN server"
   homepage "https://github.com/bkrdmrcioglu/Kite"
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "Kite.app"
 
