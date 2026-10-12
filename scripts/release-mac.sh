@@ -17,7 +17,8 @@ cd "$(dirname "$0")/.."
 (cd apple && xcodegen generate -q)
 
 xcodebuild -project apple/Kite.xcodeproj -scheme Kite -configuration Release \
-  -derivedDataPath build/release \
+  -derivedDataPath build/release -destination 'generic/platform=macOS' \
+  ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO \
   MARKETING_VERSION="$VERSION" \
   CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$IDENTITY" DEVELOPMENT_TEAM="$TEAM" \
   OTHER_CODE_SIGN_FLAGS="--timestamp" \
