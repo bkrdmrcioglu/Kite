@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import ServiceManagement
 
 /// Wraps the C engine: runs the proxy and points the system at it.
@@ -22,17 +22,19 @@ final class Engine: ObservableObject {
         }
     }
 
-    /// Discord desktop app support: its updater ignores the system proxy.
-    @Published private(set) var discordApp = HostsFile.isInstalled
-
-    func setDiscordApp(_ on: Bool) {
-        do {
-            if on { try HostsFile.install() } else { try HostsFile.remove() }
-            lastError = nil
-        } catch {
-            lastError = error.localizedDescription
-        }
-        discordApp = HostsFile.isInstalled
+    /// Some desktop apps ignore the system proxy; hosts-file entries send
+    /// them to Kite's TLS listener instead. Asked for once at launch rather
+    /// than offered as a setting, and asked again next launch if declined.
+    func ensureAppSupport() {
+        guard !HostsFile.isInstalled else { return }
+        NSApp.activate()
+        let alert = NSAlert()
+        alert.messageText = "Kite DPI için bir kez izin gerekiyor"
+        alert.informativeText = "Kite DPI'ın tarayıcı dışındaki uygulamalarda da çalışabilmesi için bir kez yönetici izni gerekiyor. İzin verdikten sonra tekrar sorulmaz."
+        alert.addButton(withTitle: "Devam")
+        alert.addButton(withTitle: "Şimdi değil")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do { try HostsFile.install() } catch { lastError = error.localizedDescription }
     }
 
     private var timer: Timer?

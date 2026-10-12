@@ -14,8 +14,11 @@ enum HostsFile {
     ]
 
     private static let path = "/etc/hosts"
-    private static let begin = "# >>> Kite (Discord) >>>"
-    private static let end = "# <<< Kite (Discord) <<<"
+    private static let begin = "# >>> Kite DPI >>>"
+    private static let end = "# <<< Kite DPI <<<"
+    /// markers written by 0.1.x, still recognized so they get replaced
+    private static let legacyBegin = "# >>> Kite (Discord) >>>"
+    private static let legacyEnd = "# <<< Kite (Discord) <<<"
 
     static var isInstalled: Bool {
         (try? String(contentsOfFile: path, encoding: .utf8))?.contains(begin) ?? false
@@ -42,8 +45,8 @@ enum HostsFile {
         var out: [Substring] = []
         var inside = false
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            if line == begin { inside = true; continue }
-            if line == end { inside = false; continue }
+            if line == begin || line == legacyBegin { inside = true; continue }
+            if line == end || line == legacyEnd { inside = false; continue }
             if !inside { out.append(line) }
         }
         while out.last?.isEmpty == true { out.removeLast() }

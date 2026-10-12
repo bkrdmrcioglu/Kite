@@ -124,7 +124,7 @@ struct ContentView: View {
 
     private var subtitle: String {
         tunnel.isOn
-            ? "Discord ve engelli siteler açılıyor.\nTrafiğin telefonundan çıkmıyor."
+            ? "Engelli siteler ve uygulamalar açılıyor.\nTrafiğin telefonundan çıkmıyor."
             : "Açmak için dokun."
     }
 

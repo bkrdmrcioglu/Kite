@@ -89,7 +89,7 @@ struct MainWindow: View {
             Text(engine.running ? "Engeller aşılıyor" : "Kapalı")
                 .font(.title3.weight(.semibold))
             Text(engine.running
-                 ? "Discord ve engelli siteler açılıyor.\nTrafiğin bilgisayarından çıkmıyor."
+                 ? "Engelli siteler ve uygulamalar açılıyor.\nTrafiğin bilgisayarından çıkmıyor."
                  : "Açmak için tıkla ya da boşluk tuşuna bas.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -119,19 +119,11 @@ struct MainWindow: View {
     }
 
     private var settingsCard: some View {
-        VStack(spacing: 0) {
-            settingRow(
-                "Mac açılınca başlat",
-                "Oturum açınca Kite DPI arka planda çalışır.",
-                isOn: $engine.launchAtLogin
-            )
-            Divider().overlay(Color.white.opacity(0.08)).padding(.leading, 14)
-            settingRow(
-                "Discord uygulaması",
-                "Masaüstü uygulaması için gerekli. Bir kez şifre ister.",
-                isOn: Binding(get: { engine.discordApp }, set: { engine.setDiscordApp($0) })
-            )
-        }
+        settingRow(
+            "Mac açılınca başlat",
+            "Oturum açınca Kite DPI arka planda çalışır.",
+            isOn: $engine.launchAtLogin
+        )
         .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
     }
 

@@ -7,6 +7,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Engine.shared.recoverFromCrash()
             Engine.shared.start()
         }
+        // after the window is up, so the permission prompt has context
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            MainActor.assumeIsolated { Engine.shared.ensureAppSupport() }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -52,7 +56,7 @@ struct MenuView: View {
                     .foregroundStyle(engine.running ? .green : .secondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Kite DPI").font(.headline)
-                    Text(engine.running ? "Açık · engeller aşılıyor" : "Kapalı")
+                    Text(engine.running ? "Açık · \(engine.stats.desynced) bağlantı korundu" : "Kapalı")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -71,22 +75,7 @@ struct MenuView: View {
             Toggle("Mac açılınca başlat", isOn: $engine.launchAtLogin)
                 .toggleStyle(.checkbox)
 
-            Toggle(isOn: Binding(get: { engine.discordApp }, set: { engine.setDiscordApp($0) })) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Discord uygulaması")
-                    Text("Masaüstü uygulaması için gerekli. Bir kez şifre ister.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .toggleStyle(.checkbox)
-
             HStack {
-                if engine.running {
-                    Text("\(engine.stats.desynced) bağlantı korundu")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
                 Spacer()
                 Button("Pencereyi aç") {
                     openWindow(id: "main")

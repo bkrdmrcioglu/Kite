@@ -4,8 +4,9 @@
  * - runs the engine (HTTP/SOCKS5 proxy on 127.0.0.1:8899, TLS on 127.0.0.1:443)
  * - points the per-user WinINet proxy at it (no admin needed) and restores the
  *   previous settings on exit, shutdown, or the next launch after a crash
- * - optional Discord app mode: hosts-file entries, written by an elevated copy
- *   of this exe started with --hosts-install / --hosts-remove
+ * - app support for programs that ignore the system proxy: hosts-file entries
+ *   written by an elevated copy of this exe (--hosts-install / --hosts-remove),
+ *   asked for once at launch
  * - a Windows 11 style flyout panel opened from the tray icon
  */
 #define _WIN32_WINNT 0x0A00
@@ -32,8 +33,11 @@
 static const wchar_t *INET_KEY = L"Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
 static const wchar_t *BACKUP_KEY = L"Software\\Kite\\ProxyBackup";
 static const wchar_t *RUN_KEY = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-static const char *HOSTS_BEGIN = "# >>> Kite (Discord) >>>";
-static const char *HOSTS_END = "# <<< Kite (Discord) <<<";
+static const char *HOSTS_BEGIN = "# >>> Kite DPI >>>";
+static const char *HOSTS_END = "# <<< Kite DPI <<<";
+/* markers written by 0.1.x, still recognized so they get replaced */
+static const char *HOSTS_LEGACY_BEGIN = "# >>> Kite (Discord) >>>";
+static const char *HOSTS_LEGACY_END = "# <<< Kite (Discord) <<<";
 
 static const char *discord_domains[] = {
     "discord.com", "www.discord.com", "ptb.discord.com", "canary.discord.com",
@@ -165,7 +169,7 @@ static void autostart_set(int on)
     }
 }
 
-/* ---- hosts file (Discord app mode) -------------------------------------- */
+/* ---- hosts file (app support) ------------------------------------------- */
 
 static void hosts_path(wchar_t *out, size_t cap)
 {
@@ -227,9 +231,11 @@ static int hosts_write(int install)
     for (char *line = old; line && *line;) {
         char *nl = strchr(line, '\n');
         size_t l = nl ? (size_t)(nl - line + 1) : strlen(line);
-        if (strncmp(line, HOSTS_BEGIN, strlen(HOSTS_BEGIN)) == 0)
+        if (strncmp(line, HOSTS_BEGIN, strlen(HOSTS_BEGIN)) == 0 ||
+            strncmp(line, HOSTS_LEGACY_BEGIN, strlen(HOSTS_LEGACY_BEGIN)) == 0)
             inside = 1;
-        else if (strncmp(line, HOSTS_END, strlen(HOSTS_END)) == 0)
+        else if (strncmp(line, HOSTS_END, strlen(HOSTS_END)) == 0 ||
+                 strncmp(line, HOSTS_LEGACY_END, strlen(HOSTS_LEGACY_END)) == 0)
             inside = 0;
         else if (!inside) {
             memcpy(out + n, line, l);
@@ -367,7 +373,7 @@ static void engine_stop(void)
 
 /* ---- flyout panel ------------------------------------------------------- */
 
-enum { HIT_NONE, HIT_MAIN, HIT_AUTOSTART, HIT_DISCORD, HIT_QUIT };
+enum { HIT_NONE, HIT_MAIN, HIT_AUTOSTART, HIT_QUIT };
 
 typedef struct {
     ARGB bg, card, hover, text, sub, line, track_off, knob_off, accent;
@@ -377,13 +383,13 @@ typedef struct {
 static Theme T;
 static int g_dpi = 96;
 static int g_hover;
-static int g_autostart, g_discord;   /* cached, refreshed on open */
+static int g_autostart;   /* cached, refreshed on open */
 static DWORD g_hidden_at;
 static HFONT f_title, f_body, f_caption, f_big;
 static RECT hit_rects[5];
 
 #define PANEL_W 360
-#define PANEL_H 330
+#define PANEL_H 274
 #define S(x) MulDiv((x), g_dpi, 96)
 
 static int system_dark(void)
@@ -545,21 +551,17 @@ static void paint_panel(HDC target)
 
     /* option rows */
     set_hit(HIT_AUTOSTART, 8, 172, PANEL_W - 16, 44);
-    set_hit(HIT_DISCORD, 8, 218, PANEL_W - 16, 56);
     if (g_hover == HIT_AUTOSTART)
         fill_round(g, T.hover, (REAL)S(8), (REAL)S(172), (REAL)S(PANEL_W - 16), (REAL)S(44), (REAL)S(6));
-    if (g_hover == HIT_DISCORD)
-        fill_round(g, T.hover, (REAL)S(8), (REAL)S(218), (REAL)S(PANEL_W - 16), (REAL)S(56), (REAL)S(6));
     draw_switch(g, S(PANEL_W - 20 - 40), S(184), S(40), S(20), g_autostart);
-    draw_switch(g, S(PANEL_W - 20 - 40), S(236), S(40), S(20), g_discord);
 
     /* footer */
-    GdipDrawLineI(g, pen, 0, S(282), W, S(282));
+    GdipDrawLineI(g, pen, 0, S(226), W, S(226));
     GdipDeletePen(pen);
-    set_hit(HIT_QUIT, PANEL_W - 16 - 72, 290, 72, 30);
-    fill_round(g, g_hover == HIT_QUIT ? T.hover : T.card, (REAL)S(PANEL_W - 16 - 72), (REAL)S(290),
+    set_hit(HIT_QUIT, PANEL_W - 16 - 72, 234, 72, 30);
+    fill_round(g, g_hover == HIT_QUIT ? T.hover : T.card, (REAL)S(PANEL_W - 16 - 72), (REAL)S(234),
                (REAL)S(72), (REAL)S(30), (REAL)S(5));
-    stroke_round(g, T.line, (REAL)S(PANEL_W - 16 - 72) + 0.5f, (REAL)S(290) + 0.5f, (REAL)S(72) - 1,
+    stroke_round(g, T.line, (REAL)S(PANEL_W - 16 - 72) + 0.5f, (REAL)S(234) + 0.5f, (REAL)S(72) - 1,
                  (REAL)S(30) - 1, (REAL)S(5), 1.0f);
     GdipDeleteGraphics(g);
 
@@ -582,14 +584,11 @@ static void paint_panel(HDC target)
     text_at(dc, f_big, T.ctext, S(PANEL_W / 2 + 16), S(112), S(140), S(34), bytes, DT_LEFT | DT_VCENTER);
 
     text_at(dc, f_body, T.ctext, S(20), S(172), S(260), S(44), L"Windows açılınca başlat", DT_LEFT | DT_VCENTER);
-    text_at(dc, f_body, T.ctext, S(20), S(224), S(260), S(22), L"Discord uygulaması", DT_LEFT | DT_VCENTER);
-    text_at(dc, f_caption, T.csub, S(20), S(246), S(260), S(18), L"Masaüstü uygulaması için · yönetici izni ister",
-            DT_LEFT | DT_VCENTER);
 
     wchar_t ver[48];
     swprintf(ver, 48, L"Kite DPI %hs", kite_version());
-    text_at(dc, f_caption, T.csub, S(20), S(290), S(160), S(30), ver, DT_LEFT | DT_VCENTER);
-    text_at(dc, f_body, T.ctext, S(PANEL_W - 16 - 72), S(290), S(72), S(30), L"Çıkış", DT_CENTER | DT_VCENTER);
+    text_at(dc, f_caption, T.csub, S(20), S(234), S(160), S(30), ver, DT_LEFT | DT_VCENTER);
+    text_at(dc, f_body, T.ctext, S(PANEL_W - 16 - 72), S(234), S(72), S(30), L"Çıkış", DT_CENTER | DT_VCENTER);
 
     BitBlt(target, 0, 0, W, H, dc, 0, 0, SRCCOPY);
     SelectObject(dc, oldbmp);
@@ -610,7 +609,6 @@ static int hit_test(int x, int y)
 static void panel_show(void)
 {
     g_autostart = autostart_enabled();
-    g_discord = hosts_installed();
     POINT cur;
     GetCursorPos(&cur);
     HMONITOR mon = MonitorFromPoint(cur, MONITOR_DEFAULTTONEAREST);
@@ -670,16 +668,6 @@ static void panel_click(int hit)
         autostart_set(!g_autostart);
         g_autostart = autostart_enabled();
         break;
-    case HIT_DISCORD: {
-        int on = !g_discord;
-        panel_hide(); /* the UAC prompt takes focus anyway */
-        if (hosts_elevated(on) != 0)
-            tray_notify(L"Discord uygulaması", L"Hosts dosyası değiştirilemedi (izin verilmedi).");
-        else if (on)
-            tray_notify(L"Discord uygulaması hazır", L"Discord'u tamamen kapatıp yeniden aç.");
-        g_discord = hosts_installed();
-        return;
-    }
     case HIT_QUIT:
         DestroyWindow(g_hwnd);
         return;
@@ -849,7 +837,19 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
 
     tray_add();
     engine_start();
-    if (g_running && !wcsstr(cmd, L"--autostart"))
+    int autostart = wcsstr(cmd, L"--autostart") != NULL;
+    /* Some programs ignore the system proxy. Ask once for the admin rights
+     * needed to route them through Kite; ask again next launch if declined,
+     * but never at login, when nobody may be looking. */
+    if (!autostart && !hosts_installed()) {
+        int ok = MessageBoxW(NULL,
+            L"Kite DPI'ın tarayıcı dışındaki uygulamalarda da çalışabilmesi için bir kez yönetici izni gerekiyor.\n\n"
+            L"İzin verdikten sonra tekrar sorulmaz.",
+            L"Kite DPI", MB_OKCANCEL | MB_ICONINFORMATION | MB_SETFOREGROUND) == IDOK;
+        if (ok && hosts_elevated(1) != 0)
+            tray_notify(L"Kite DPI", L"İzin verilmedi. Uygulamalar için destek bir sonraki açılışta tekrar sorulacak.");
+    }
+    if (g_running && !autostart)
         tray_notify(L"Kite DPI çalışıyor", L"Engelli siteler artık açılıyor. Ayarlar için sağ alttaki simgeye tıkla.");
 
     MSG msg;

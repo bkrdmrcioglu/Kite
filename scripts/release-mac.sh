@@ -20,6 +20,7 @@ OUT=build/release-mac
 rm -rf "$OUT" && mkdir -p "$OUT" dist
 xcodebuild -project apple/Kite.xcodeproj -scheme Kite -configuration Release \
   -destination 'generic/platform=macOS' -archivePath "$OUT/Kite.xcarchive" \
+  -derivedDataPath build/dd-release-mac \
   ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO MARKETING_VERSION="$VERSION" \
   CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_IDENTITY="Apple Development" \
   -allowProvisioningUpdates archive -quiet
