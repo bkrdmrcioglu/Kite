@@ -5,7 +5,15 @@ import ServiceManagement
 @MainActor
 final class Engine: ObservableObject {
     static let shared = Engine()
-    nonisolated static let port: UInt16 = 8899
+    /// Preferred proxy port; change with
+    /// `defaults write com.bkrdmrcioglu.kite port -int 9000`.
+    static var preferredPort: UInt16 {
+        let p = UserDefaults.standard.integer(forKey: "port")
+        return (1024...65535).contains(p) ? UInt16(p) : 8899
+    }
+
+    /// Port actually in use (another free one if the preferred port is busy).
+    @Published private(set) var port: UInt16 = 0
 
     @Published private(set) var running = false
     @Published private(set) var stats = kite_stats()
@@ -18,7 +26,7 @@ final class Engine: ObservableObject {
                 if launchAtLogin { try SMAppService.mainApp.register() }
                 else { try SMAppService.mainApp.unregister() }
             } catch {
-                lastError = "Açılışta başlatma ayarlanamadı: \(error.localizedDescription)"
+                lastError = tr("Açılışta başlatma ayarlanamadı: ", "Could not set launch at login: ") + error.localizedDescription
             }
         }
     }
@@ -30,10 +38,11 @@ final class Engine: ObservableObject {
         guard !HostsFile.isInstalled else { return }
         NSApp.activate()
         let alert = NSAlert()
-        alert.messageText = "Kite DPI için bir kez izin gerekiyor"
-        alert.informativeText = "Kite DPI'ın tarayıcı dışındaki uygulamalarda da çalışabilmesi için bir kez yönetici izni gerekiyor. İzin verdikten sonra tekrar sorulmaz."
-        alert.addButton(withTitle: "Devam")
-        alert.addButton(withTitle: "Şimdi değil")
+        alert.messageText = tr("Kite DPI için bir kez izin gerekiyor", "Kite DPI needs permission once")
+        alert.informativeText = tr("Kite DPI'ın tarayıcı dışındaki uygulamalarda da çalışabilmesi için bir kez yönetici izni gerekiyor. İzin verdikten sonra tekrar sorulmaz.",
+                                   "To work in apps other than your browser, Kite DPI needs administrator permission once. You won't be asked again.")
+        alert.addButton(withTitle: tr("Devam", "Continue"))
+        alert.addButton(withTitle: tr("Şimdi değil", "Not now"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         do { try HostsFile.install() } catch { lastError = error.localizedDescription }
     }
@@ -53,14 +62,16 @@ final class Engine: ObservableObject {
         guard !running else { return }
         var cfg = kite_config()
         kite_config_default(&cfg)
-        cfg.listen_port = Self.port
+        cfg.listen_port = Self.preferredPort
+        cfg.port_fallback = 1
         cfg.sni_port = 443
         if kite_start(&cfg) != 0 {
-            lastError = "Kite DPI başlatılamadı (port \(Self.port) kullanımda)."
+            lastError = tr("Kite DPI başlatılamadı.", "Could not start Kite DPI.")
             return
         }
+        port = kite_listen_port()
         do {
-            try SystemProxy.apply(port: Self.port)
+            try SystemProxy.apply(port: port)
         } catch {
             kite_stop()
             lastError = error.localizedDescription

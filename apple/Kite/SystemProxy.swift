@@ -13,6 +13,8 @@ enum SystemProxy {
         }
         var web: [String: Proxy] = [:]
         var secure: [String: Proxy] = [:]
+        /// port Kite listened on when the backup was taken (older backups: 8899)
+        var kitePort: String?
     }
 
     private static var stateURL: URL {
@@ -50,6 +52,7 @@ enum SystemProxy {
 
     static func apply(port: UInt16) throws {
         var saved = Saved()
+        saved.kitePort = "\(port)"
         if !isApplied {
             for s in services() {
                 saved.web[s] = read("-getwebproxy", s)
@@ -77,7 +80,7 @@ enum SystemProxy {
             let state = flag == "web" ? "-setwebproxystate" : "-setsecurewebproxystate"
             for (s, p) in map {
                 // a proxy that pointed at Kite itself counts as "was off"
-                let ours = p.server == "127.0.0.1" && p.port == "\(Engine.port)"
+                let ours = p.server == "127.0.0.1" && p.port == (saved.kitePort ?? "8899")
                 if p.enabled && !ours {
                     commands.append([set, s, p.server, p.port])
                 } else {
@@ -94,7 +97,7 @@ enum SystemProxy {
     enum Failure: LocalizedError {
         case denied(String)
         var errorDescription: String? {
-            if case .denied(let m) = self { return "Proxy ayarı değiştirilemedi: \(m)" }
+            if case .denied(let m) = self { return tr("Proxy ayarı değiştirilemedi: ", "Could not change the proxy settings: ") + m }
             return nil
         }
     }

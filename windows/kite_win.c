@@ -21,7 +21,7 @@
 #include <wininet.h>
 #include "kite.h"
 
-#define PROXY_PORT 8899
+#define DEFAULT_PORT 8899
 #define SNI_PORT 443
 #define WM_TRAY (WM_APP + 1)
 #define WM_KITE_UPDATE (WM_APP + 2)
@@ -58,6 +58,11 @@ static HWND g_panel;  /* flyout */
 static NOTIFYICONDATAW g_nid;
 static UINT g_taskbar_created;
 static int g_running;
+static int g_tr;               /* Turkish UI language */
+static uint16_t g_port;        /* port the proxy actually listens on */
+
+/* Turkish on Turkish Windows, English everywhere else. */
+#define TX(turkish, english) (g_tr ? (turkish) : (english))
 
 /* ---- registry helpers --------------------------------------------------- */
 
@@ -120,8 +125,9 @@ static void proxy_apply(void)
             reg_set_sz(HKEY_CURRENT_USER, BACKUP_KEY, L"ProxyOverride", override);
         reg_set_dword(HKEY_CURRENT_USER, BACKUP_KEY, L"Applied", 1);
     }
+    reg_set_dword(HKEY_CURRENT_USER, BACKUP_KEY, L"KitePort", g_port);
     wchar_t server[64];
-    swprintf(server, 64, L"127.0.0.1:%d", PROXY_PORT);
+    swprintf(server, 64, L"127.0.0.1:%u", (unsigned)g_port);
     reg_set_dword(HKEY_CURRENT_USER, INET_KEY, L"ProxyEnable", 1);
     reg_set_sz(HKEY_CURRENT_USER, INET_KEY, L"ProxyServer", server);
     reg_set_sz(HKEY_CURRENT_USER, INET_KEY, L"ProxyOverride", L"<local>;localhost;127.*;10.*;192.168.*");
@@ -145,8 +151,10 @@ static void proxy_restore(void)
     else
         reg_delete_value(HKEY_CURRENT_USER, INET_KEY, L"ProxyOverride");
     /* a backup that pointed at Kite itself means the proxy was really off */
+    DWORD kite_port = DEFAULT_PORT;
+    reg_get_dword(HKEY_CURRENT_USER, BACKUP_KEY, L"KitePort", &kite_port);
     wchar_t ours[64];
-    swprintf(ours, 64, L"127.0.0.1:%d", PROXY_PORT);
+    swprintf(ours, 64, L"127.0.0.1:%lu", (unsigned long)kite_port);
     if (reg_get_sz(HKEY_CURRENT_USER, INET_KEY, L"ProxyServer", server, 1024) && wcscmp(server, ours) == 0)
         reg_set_dword(HKEY_CURRENT_USER, INET_KEY, L"ProxyEnable", 0);
     RegDeleteKeyW(HKEY_CURRENT_USER, BACKUP_KEY);
@@ -317,7 +325,7 @@ static void tray_update(void)
     LoadIconMetric(GetModuleHandleW(NULL), MAKEINTRESOURCEW(g_running ? IDI_KITE_ON : IDI_KITE_OFF),
                    LIM_SMALL, &icon);
     g_nid.hIcon = icon;
-    wcscpy(g_nid.szTip, g_running ? L"Kite DPI – Açık" : L"Kite DPI – Kapalı");
+    wcscpy(g_nid.szTip, g_running ? TX(L"Kite DPI – Açık", L"Kite DPI – On") : TX(L"Kite DPI – Kapalı", L"Kite DPI – Off"));
     g_nid.uFlags = NIF_ICON | NIF_TIP;
     Shell_NotifyIconW(NIM_MODIFY, &g_nid);
     if (old)
@@ -354,12 +362,18 @@ static void engine_start(void)
         return;
     kite_config cfg;
     kite_config_default(&cfg);
-    cfg.listen_port = PROXY_PORT;
+    /* change with: "Kite DPI.exe" --port 9000 (remembered) */
+    DWORD pref = DEFAULT_PORT;
+    reg_get_dword(HKEY_CURRENT_USER, L"Software\\Kite", L"Port", &pref);
+    cfg.listen_port = pref >= 1024 && pref <= 65535 ? (uint16_t)pref : DEFAULT_PORT;
+    cfg.port_fallback = 1;
     cfg.sni_port = SNI_PORT;
     if (kite_start(&cfg) != 0) {
-        tray_notify(L"Kite DPI başlatılamadı", L"8899 portu başka bir program tarafından kullanılıyor olabilir.");
+        tray_notify(TX(L"Kite DPI başlatılamadı", L"Could not start Kite DPI"),
+                    TX(L"Boş bir port bulunamadı.", L"No free port was found."));
         return;
     }
+    g_port = kite_listen_port();
     proxy_apply();
     g_running = 1;
     tray_update();
@@ -696,7 +710,7 @@ static void fmt_bytes(uint64_t n, wchar_t *out, size_t cap)
         swprintf(out, cap, L"%llu B", (unsigned long long)n);
     else
         swprintf(out, cap, L"%.1f %ls", v, units[u]);
-    for (wchar_t *p = out; *p; p++)
+    for (wchar_t *p = out; g_tr && *p; p++)
         if (*p == L'.')
             *p = L',';   /* Turkish decimal separator */
 }
@@ -783,42 +797,47 @@ static void paint_panel(HDC target)
     wchar_t ver[24];
     swprintf(ver, 24, L"v%hs", kite_version());
     text_at(dc, f_caption, T.csub, S(152), S(19), S(80), S(20), ver, DT_LEFT | DT_VCENTER);
+    wchar_t status[64];
+    if (g_running)
+        swprintf(status, 64, TX(L"Açık · port %u", L"On · port %u"), (unsigned)g_port);
+    else
+        wcscpy(status, TX(L"Kapalı · tıkla ve aç", L"Off · click to turn on"));
     text_at(dc, f_caption, g_running ? RGB(34, 197, 94) : T.csub, S(72), S(40), S(200), S(20),
-            g_running ? L"Açık · engeller aşılıyor" : L"Kapalı · tıkla ve aç", DT_LEFT | DT_VCENTER);
+            status, DT_LEFT | DT_VCENTER);
 
     wchar_t num[64], bytes[64];
     swprintf(num, 64, L"%llu", (unsigned long long)st.desynced);
     fmt_bytes(st.bytes_down, bytes, 64);
-    text_at(dc, f_caption, T.csub, S(32), S(92), S(140), S(18), L"Korunan bağlantı", DT_LEFT | DT_VCENTER);
+    text_at(dc, f_caption, T.csub, S(32), S(92), S(140), S(18), TX(L"Korunan bağlantı", L"Protected"), DT_LEFT | DT_VCENTER);
     text_at(dc, f_big, T.ctext, S(32), S(112), S(140), S(34), num, DT_LEFT | DT_VCENTER);
-    text_at(dc, f_caption, T.csub, S(PANEL_W / 2 + 16), S(92), S(140), S(18), L"İndirilen veri", DT_LEFT | DT_VCENTER);
+    text_at(dc, f_caption, T.csub, S(PANEL_W / 2 + 16), S(92), S(140), S(18), TX(L"İndirilen veri", L"Downloaded"), DT_LEFT | DT_VCENTER);
     text_at(dc, f_big, T.ctext, S(PANEL_W / 2 + 16), S(112), S(140), S(34), bytes, DT_LEFT | DT_VCENTER);
 
     if (u) {
         wchar_t line[96];
         if (g_upd_state == UPD_AVAILABLE)
-            swprintf(line, 96, L"Güncelleme var · %ls", g_upd_version);
+            swprintf(line, 96, TX(L"Güncelleme var · %ls", L"Update available · %ls"), g_upd_version);
         else if (g_upd_state == UPD_INSTALLING)
-            wcscpy(line, L"Güncelleme indiriliyor…");
+            wcscpy(line, TX(L"Güncelleme indiriliyor…", L"Downloading update…"));
         else
-            wcscpy(line, L"Güncelleme kurulamadı");
+            wcscpy(line, TX(L"Güncelleme kurulamadı", L"Update failed"));
         text_at(dc, f_body, T.ctext, S(30), S(168), S(220), S(44), line, DT_LEFT | DT_VCENTER);
         if (g_upd_state == UPD_AVAILABLE)
-            text_at(dc, f_body, RGB(255, 255, 255), S(PANEL_W - 16 - 8 - 84), S(175), S(84), S(30), L"Güncelle",
+            text_at(dc, f_body, RGB(255, 255, 255), S(PANEL_W - 16 - 8 - 84), S(175), S(84), S(30), TX(L"Güncelle", L"Update"),
                     DT_CENTER | DT_VCENTER);
     }
 
-    text_at(dc, f_body, T.ctext, S(20), S(172 + u), S(260), S(44), L"Windows açılınca başlat", DT_LEFT | DT_VCENTER);
+    text_at(dc, f_body, T.ctext, S(20), S(172 + u), S(260), S(44), TX(L"Windows açılınca başlat", L"Start with Windows"), DT_LEFT | DT_VCENTER);
 
-    const wchar_t *check = g_check_state == CHECK_RUNNING    ? L"Kontrol ediliyor…"
-                         : g_check_state == CHECK_UP_TO_DATE ? L"✓ Kite DPI güncel"
-                         : g_check_state == CHECK_FAILED     ? L"Kontrol edilemedi"
-                                                             : L"Güncellemeleri kontrol et";
+    const wchar_t *check = g_check_state == CHECK_RUNNING    ? TX(L"Kontrol ediliyor…", L"Checking…")
+                         : g_check_state == CHECK_UP_TO_DATE ? TX(L"✓ Kite DPI güncel", L"✓ Kite DPI is up to date")
+                         : g_check_state == CHECK_FAILED     ? TX(L"Kontrol edilemedi", L"Could not check")
+                                                             : TX(L"Güncellemeleri kontrol et", L"Check for updates");
     COLORREF link = g_check_state == CHECK_IDLE ? RGB(59, 130, 246)
                   : g_check_state == CHECK_UP_TO_DATE ? RGB(34, 197, 94) : T.csub;
     text_at(dc, f_body, link, S(20), S(234 + u), S(190), S(30), check, DT_LEFT | DT_VCENTER);
-    text_at(dc, f_body, T.ctext, S(PANEL_W - 16 - 72), S(234 + u), S(72), S(30), L"Çıkış", DT_CENTER | DT_VCENTER);
-    text_at(dc, f_caption, T.csub, 0, S(270 + u), W, S(22), L"Bekir Demircioğlu tarafından sevgiyle geliştirildi",
+    text_at(dc, f_body, T.ctext, S(PANEL_W - 16 - 72), S(234 + u), S(72), S(30), TX(L"Çıkış", L"Quit"), DT_CENTER | DT_VCENTER);
+    text_at(dc, f_caption, T.csub, 0, S(270 + u), W, S(22), TX(L"Bekir Demircioğlu tarafından sevgiyle geliştirildi", L"Made with love by Bekir Demircioğlu"),
             DT_CENTER | DT_VCENTER);
 
     BitBlt(target, 0, 0, W, H, dc, 0, 0, SRCCOPY);
@@ -991,11 +1010,11 @@ static void panel_create(HINSTANCE inst)
 static void show_context_menu(void)
 {
     HMENU m = CreatePopupMenu();
-    AppendMenuW(m, MF_STRING, ID_OPEN, L"Kite DPI'ı aç");
-    AppendMenuW(m, MF_STRING | (g_running ? MF_CHECKED : 0), ID_TOGGLE, L"Engelleri aş");
-    AppendMenuW(m, MF_STRING, ID_CHECK, L"Güncellemeleri kontrol et");
+    AppendMenuW(m, MF_STRING, ID_OPEN, TX(L"Kite DPI'ı aç", L"Open Kite DPI"));
+    AppendMenuW(m, MF_STRING | (g_running ? MF_CHECKED : 0), ID_TOGGLE, TX(L"Engelleri aş", L"Bypass blocks"));
+    AppendMenuW(m, MF_STRING, ID_CHECK, TX(L"Güncellemeleri kontrol et", L"Check for updates"));
     AppendMenuW(m, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(m, MF_STRING, ID_QUIT, L"Çıkış");
+    AppendMenuW(m, MF_STRING, ID_QUIT, TX(L"Çıkış", L"Quit"));
     SetMenuDefaultItem(m, ID_OPEN, FALSE);
     POINT pt;
     GetCursorPos(&pt);
@@ -1024,11 +1043,11 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
             SetTimer(h, CHECK_RESULT_TIMER, 6000, NULL);
             if (!IsWindowVisible(g_panel)) {
                 wchar_t text[96];
-                swprintf(text, 96, L"En son sürümü kullanıyorsun (%hs).", kite_version());
+                swprintf(text, 96, TX(L"En son sürümü kullanıyorsun (%hs).", L"You have the latest version (%hs)."), kite_version());
                 if (wp == UPD_MSG_UP_TO_DATE)
-                    tray_notify(L"Kite DPI güncel", text);
+                    tray_notify(TX(L"Kite DPI güncel", L"Kite DPI is up to date"), text);
                 else
-                    tray_notify(L"Güncellemeler kontrol edilemedi", L"İnternet bağlantını kontrol et.");
+                    tray_notify(TX(L"Güncellemeler kontrol edilemedi", L"Could not check for updates"), TX(L"İnternet bağlantını kontrol et.", L"Check your internet connection."));
             }
             InvalidateRect(g_panel, NULL, FALSE);
             return 0;
@@ -1037,15 +1056,16 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         if (wp == UPD_AVAILABLE && g_upd_state != UPD_AVAILABLE) {
             g_upd_state = UPD_AVAILABLE;
             wchar_t text[128];
-            swprintf(text, 128, L"Kite DPI %ls hazır. Kurmak için sağ alttaki simgeye tıkla.", g_upd_version);
-            tray_notify(L"Güncelleme var", text);
+            swprintf(text, 128, TX(L"Kite DPI %ls hazır. Kurmak için sağ alttaki simgeye tıkla.", L"Kite DPI %ls is ready. Click the tray icon to install it."), g_upd_version);
+            tray_notify(TX(L"Güncelleme var", L"Update available"), text);
         } else if (wp == UPD_INSTALLING) {
             update_relaunch();
             return 0;
         } else if (wp == UPD_FAILED) {
             g_upd_state = UPD_FAILED;
-            tray_notify(L"Güncelleme kurulamadı",
-                        L"Yeni sürümü github.com/bkrdmrcioglu/Kite adresinden indirebilirsin.");
+            tray_notify(TX(L"Güncelleme kurulamadı", L"Update failed"),
+                        TX(L"Yeni sürümü github.com/bkrdmrcioglu/Kite adresinden indirebilirsin.",
+                           L"Download the new version from github.com/bkrdmrcioglu/Kite."));
         }
         if (IsWindowVisible(g_panel))
             panel_show(); /* resize for the update row */
@@ -1089,6 +1109,13 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
 {
     (void)prev;
     (void)show;
+    g_tr = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_TURKISH;
+    const wchar_t *port_arg = wcsstr(cmd, L"--port ");
+    if (port_arg) {
+        long p = wcstol(port_arg + 7, NULL, 10);
+        if (p >= 1024 && p <= 65535)
+            reg_set_dword(HKEY_CURRENT_USER, L"Software\\Kite", L"Port", (DWORD)p);
+    }
     if (wcsstr(cmd, L"--hosts-install"))
         return hosts_write(1);
     if (wcsstr(cmd, L"--hosts-remove"))
@@ -1139,18 +1166,20 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
      * but never at login, when nobody may be looking. */
     if (!autostart && !hosts_installed()) {
         int ok = MessageBoxW(NULL,
-            L"Kite DPI'ın tarayıcı dışındaki uygulamalarda da çalışabilmesi için bir kez yönetici izni gerekiyor.\n\n"
-            L"İzin verdikten sonra tekrar sorulmaz.",
+            TX(L"Kite DPI'ın tarayıcı dışındaki uygulamalarda da çalışabilmesi için bir kez yönetici izni gerekiyor.\n\n"
+               L"İzin verdikten sonra tekrar sorulmaz.",
+               L"To work in apps other than your browser, Kite DPI needs administrator permission once.\n\n"
+               L"You won't be asked again."),
             L"Kite DPI", MB_OKCANCEL | MB_ICONINFORMATION | MB_SETFOREGROUND) == IDOK;
         if (ok && hosts_elevated(1) != 0)
-            tray_notify(L"Kite DPI", L"İzin verilmedi. Uygulamalar için destek bir sonraki açılışta tekrar sorulacak.");
+            tray_notify(L"Kite DPI", TX(L"İzin verilmedi. Bir sonraki açılışta tekrar sorulacak.", L"Permission was not granted. You will be asked again next time."));
     }
     if (after_update) {
         wchar_t text[96];
-        swprintf(text, 96, L"Kite DPI %hs sürümüne güncellendi.", kite_version());
-        tray_notify(L"Güncelleme tamamlandı", text);
+        swprintf(text, 96, TX(L"Kite DPI %hs sürümüne güncellendi.", L"Kite DPI was updated to %hs."), kite_version());
+        tray_notify(TX(L"Güncelleme tamamlandı", L"Update complete"), text);
     } else if (g_running && !autostart) {
-        tray_notify(L"Kite DPI çalışıyor", L"Engelli siteler artık açılıyor. Ayarlar için sağ alttaki simgeye tıkla.");
+        tray_notify(TX(L"Kite DPI çalışıyor", L"Kite DPI is running"), TX(L"Engelli siteler artık açılıyor. Ayarlar için sağ alttaki simgeye tıkla.", L"Blocked sites now open. Click the tray icon for settings."));
     }
     update_check(0);
     SetTimer(g_hwnd, UPDATE_TIMER, 6 * 60 * 60 * 1000, NULL);

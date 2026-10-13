@@ -68,7 +68,7 @@ struct MenuView: View {
             UpdateBanner()
 
             HStack {
-                Label("Mac açılınca başlat", systemImage: "power.circle")
+                Label(tr("Mac açılınca başlat", "Launch at login"), systemImage: "power.circle")
                 Spacer()
                 Toggle("", isOn: $engine.launchAtLogin)
                     .toggleStyle(.switch)
@@ -81,14 +81,14 @@ struct MenuView: View {
             .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
 
             HStack(spacing: 8) {
-                footerButton("Pencere", "macwindow") {
+                footerButton(tr("Pencere", "Window"), "macwindow") {
                     openWindow(id: "main")
                     NSApp.activate()
                 }
-                footerButton("Güncellemeler", "arrow.triangle.2.circlepath") {
+                footerButton(tr("Güncellemeler", "Updates"), "arrow.triangle.2.circlepath") {
                     Updater.shared.checkNow()
                 }
-                footerButton("Çıkış", "xmark.circle") {
+                footerButton(tr("Çıkış", "Quit"), "xmark.circle") {
                     NSApp.terminate(nil)
                 }
             }
@@ -119,7 +119,7 @@ struct MenuView: View {
                     Circle()
                         .fill(engine.running ? green : Color.secondary)
                         .frame(width: 7, height: 7)
-                    Text(engine.running ? "Açık" : "Kapalı")
+                    Text(engine.running ? tr("Açık · port \(engine.port)", "On · port \(engine.port)") : tr("Kapalı", "Off"))
                         .font(.caption)
                         .foregroundStyle(engine.running ? green : .secondary)
                 }
@@ -137,13 +137,13 @@ struct MenuView: View {
     private var statusCard: some View {
         HStack(spacing: 0) {
             if engine.running {
-                stat("Korunan bağlantı", "\(engine.stats.desynced)")
+                stat(tr("Korunan bağlantı", "Protected"), "\(engine.stats.desynced)")
                 Divider().frame(height: 28).overlay(Color.white.opacity(0.1))
-                stat("İndirilen", ByteCountFormatter.string(fromByteCount: Int64(engine.stats.bytes_down), countStyle: .binary))
+                stat(tr("İndirilen", "Downloaded"), ByteCountFormatter.string(fromByteCount: Int64(engine.stats.bytes_down), countStyle: .binary))
             } else {
                 VStack(spacing: 3) {
-                    Text("Engel aşma kapalı").font(.callout.weight(.semibold))
-                    Text("Açmak için sağ üstteki anahtarı kullan.")
+                    Text(tr("Engel aşma kapalı", "Bypass is off")).font(.callout.weight(.semibold))
+                    Text(tr("Açmak için sağ üstteki anahtarı kullan.", "Use the switch at the top right to turn it on."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

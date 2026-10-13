@@ -23,6 +23,7 @@ typedef enum {
 
 typedef struct {
     uint16_t listen_port;       /* default 8899 */
+    int port_fallback;          /* if listen_port is busy, use the next free port */
     uint16_t sni_port;          /* transparent TLS listener for hosts-file redirects, 0 = off */
     kite_strategy strategy;     /* default KITE_STRATEGY_TLSREC */
     int tcp_split;              /* also send tlsrec records as separate segments */
@@ -52,6 +53,8 @@ void kite_config_default(kite_config *cfg);
 int kite_start(const kite_config *cfg);
 void kite_stop(void);
 int kite_running(void);
+/* Port the proxy actually listens on (differs from listen_port after a fallback). */
+uint16_t kite_listen_port(void);
 /* 1 when the transparent TLS listener (sni_port) is accepting. */
 int kite_sni_listening(void);
 

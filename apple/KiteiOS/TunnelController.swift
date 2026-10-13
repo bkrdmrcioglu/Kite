@@ -73,7 +73,7 @@ final class TunnelController: ObservableObject {
         let m = NETunnelProviderManager()
         let proto = NETunnelProviderProtocol()
         proto.providerBundleIdentifier = TunnelShared.providerBundleID
-        proto.serverAddress = "Cihaz içi (sunucu yok)"
+        proto.serverAddress = tr("Cihaz içi (sunucu yok)", "On device (no server)")
         m.protocolConfiguration = proto
         m.localizedDescription = "Kite DPI"
         m.isEnabled = true

@@ -34,7 +34,8 @@ Windows sürümü henüz imzalı değil. SmartScreen uyarısı çıkarsa **Ek bi
 2. **TLS kayıt bölme:** TLS ClientHello'yu site adının ortasından iki ayrı TLS kaydına böler ve ayrı TCP parçaları olarak gönderir. DPI site adını göremez, sunucu kayıtları sorunsuz birleştirir.
 3. **Yerel proxy:** Sistemin proxy ayarını kendine yönlendirir. Kapanınca, çökünce ya da bilgisayar kapanınca eski ayarı geri yükler.
 4. **Uygulama desteği:** Proxy ayarına uymayan uygulamalar için ilk açılışta bir kez yönetici izni ister ve bu uygulamaların adreslerini hosts dosyasıyla Kite DPI'a yönlendirir. Kite DPI bu bağlantıları 443 portunda karşılar. `brew uninstall --zap --cask kite-dpi` ile kaldırırken bu satırlar da silinir.
-5. **Güncellemeler:** Açılışta ve 6 saatte bir bu deponun GitHub sürümlerine bakar. Yeni sürüm varsa panelde **Güncelle** düğmesi çıkar; tek tıkla indirip kurar ve kendini yeniden başlatır.
+5. **Port:** Varsayılan port 8899. Doluysa Kite DPI yakındaki boş bir porta geçer ve panelde hangi portu kullandığını gösterir. Elle değiştirmek için aşağıdaki **Port** bölümüne bak.
+6. **Güncellemeler:** Açılışta ve 6 saatte bir bu deponun GitHub sürümlerine bakar. Yeni sürüm varsa panelde **Güncelle** düğmesi çıkar; tek tıkla indirip kurar ve kendini yeniden başlatır.
 
 | Platform | Yöntem |
 |---|---|
@@ -65,6 +66,21 @@ Kite DPI defeats SNI-based **Deep Packet Inspection** censorship without a VPN s
 | **macOS** 14+ (universal) | [Releases](https://github.com/bkrdmrcioglu/Kite/releases/latest) or `brew install --cask bkrdmrcioglu/tap/kite-dpi` |
 | **Windows** 10/11 x64 | [Releases](https://github.com/bkrdmrcioglu/Kite/releases/latest) |
 | **iOS** 17+ | Coming soon (TestFlight) |
+
+### Language
+
+The apps follow your system language: Turkish on Turkish systems, English everywhere else.
+
+### Port
+
+The local proxy listens on `127.0.0.1:8899` by default. If that port is taken, Kite DPI picks the next free one and shows it in the panel ("On · port 8900"). To choose a port yourself:
+
+| Platform | Command |
+|---|---|
+| Windows | Run once: `"Kite DPI.exe" --port 9000` (remembered for later starts) |
+| macOS | `defaults write com.bkrdmrcioglu.kite port -int 9000`, then restart Kite DPI |
+
+Ports 1024–65535 are accepted. The system proxy is pointed at whichever port is actually in use.
 
 ### Strategies
 

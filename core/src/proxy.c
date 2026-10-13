@@ -14,7 +14,7 @@
 #include "internal.h"
 #include "net.h"
 
-#define KITE_VERSION "0.1.6"
+#define KITE_VERSION "0.1.7"
 #define BUF_SIZE 65536
 #define HELLO_MAX (16384 + 5 + 4096)
 #define IDLE_TIMEOUT_MS (10 * 60 * 1000)
@@ -527,6 +527,7 @@ static int listeners[MAX_LISTENERS];
 static int listener_kind[MAX_LISTENERS];
 static int nlisteners;
 static int sni_ok;
+static uint16_t bound_port;
 
 static int is_loopback(const struct sockaddr_storage *ss)
 {
@@ -645,8 +646,19 @@ int kite_start(const kite_config *cfg)
     nlisteners = 0;
     sni_ok = 0;
     int fd = open_listener(AF_INET, g_cfg.listen_port, 0);
+    if (fd < 0 && g_cfg.port_fallback) {
+        /* another program owns the port: try the next ones, then any port */
+        for (unsigned p = g_cfg.listen_port + 1u; fd < 0 && p < g_cfg.listen_port + 50u && p < 65536u; p++)
+            fd = open_listener(AF_INET, (uint16_t)p, 0);
+        if (fd < 0)
+            fd = open_listener(AF_INET, 0, 0);
+    }
     if (fd < 0)
         return -1;
+    struct sockaddr_in bound;
+    socklen_t blen = sizeof(bound);
+    getsockname(fd, (struct sockaddr *)&bound, &blen);
+    bound_port = ntohs(bound.sin_port);
     listeners[nlisteners] = fd;
     listener_kind[nlisteners++] = LISTEN_PROXY;
 
@@ -681,7 +693,7 @@ int kite_start(const kite_config *cfg)
         close_listeners();
         return -1;
     }
-    kite_log("listening on 127.0.0.1:%u, sni %s", g_cfg.listen_port, sni_ok ? "on" : "off");
+    kite_log("listening on 127.0.0.1:%u, sni %s", bound_port, sni_ok ? "on" : "off");
     return 0;
 }
 
@@ -695,4 +707,5 @@ void kite_stop(void)
 }
 
 int kite_running(void) { return running; }
+uint16_t kite_listen_port(void) { return running ? bound_port : 0; }
 int kite_sni_listening(void) { return running && sni_ok; }

@@ -37,7 +37,8 @@ final class Updater: ObservableObject {
         }
     }
 
-    static let credit = "Bekir Demircioğlu tarafından sevgiyle geliştirildi"
+    static let credit = tr("Bekir Demircioğlu tarafından sevgiyle geliştirildi", "Made with love by Bekir Demircioğlu")
+    private static let checkFailed = tr("Güncellemeler kontrol edilemedi. İnternet bağlantını kontrol et.", "Could not check for updates. Check your internet connection.")
 
     /// "Güncellemeleri kontrol et": same check, but reports "up to date"
     /// and network errors instead of staying silent.
@@ -47,10 +48,10 @@ final class Updater: ObservableObject {
         Task {
             let found = await check()
             if case .available = state { return }
-            state = found == nil ? .failed("Güncellemeler kontrol edilemedi. İnternet bağlantını kontrol et.") : .upToDate
+            state = found == nil ? .failed(Self.checkFailed) : .upToDate
             // let the result fade back to the plain button after a while
             try? await Task.sleep(for: .seconds(6))
-            if state == .upToDate || state == .failed("Güncellemeler kontrol edilemedi. İnternet bağlantını kontrol et.") {
+            if state == .upToDate || state == .failed(Self.checkFailed) {
                 state = .idle
             }
         }
@@ -98,13 +99,13 @@ final class Updater: ObservableObject {
 
     struct Failure: LocalizedError {
         let errorDescription: String?
-        init(_ message: String) { errorDescription = "Güncelleme kurulamadı: \(message)" }
+        init(_ message: String) { errorDescription = tr("Güncelleme kurulamadı: ", "Update failed: ") + message }
     }
 
     /// Downloads the DMG and copies the verified app out of it into a temp folder.
     nonisolated private static func download(_ url: URL) async throws -> URL {
         let (file, response) = try await URLSession.shared.download(from: url)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw Failure("indirme başarısız") }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw Failure(tr("indirme başarısız", "download failed")) }
 
         let work = FileManager.default.temporaryDirectory.appendingPathComponent("kite-update-\(UUID().uuidString)")
         let mount = work.appendingPathComponent("mnt")
@@ -116,7 +117,7 @@ final class Updater: ObservableObject {
         defer { _ = try? run("/usr/bin/hdiutil", ["detach", mount.path, "-force"]) }
 
         guard let name = try FileManager.default.contentsOfDirectory(atPath: mount.path)
-            .first(where: { $0.hasSuffix(".app") }) else { throw Failure("DMG içinde uygulama yok") }
+            .first(where: { $0.hasSuffix(".app") }) else { throw Failure(tr("DMG içinde uygulama yok", "no app in the DMG")) }
         let app = work.appendingPathComponent(name)
         try run("/usr/bin/ditto", [mount.appendingPathComponent(name).path, app.path])
 
@@ -155,7 +156,7 @@ final class Updater: ObservableObject {
         let out = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         p.waitUntilExit()
         guard p.terminationStatus == 0 else {
-            throw Failure("\(URL(fileURLWithPath: tool).lastPathComponent) hata verdi")
+            throw Failure(URL(fileURLWithPath: tool).lastPathComponent + tr(" hata verdi", " failed"))
         }
         return out
     }
@@ -182,7 +183,7 @@ struct UpdateBanner: View {
         case .checking:
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("Güncellemeler kontrol ediliyor…").font(.callout)
+                Text(tr("Güncellemeler kontrol ediliyor…", "Checking for updates…")).font(.callout)
                 Spacer()
             }
             .padding(10)
@@ -190,7 +191,7 @@ struct UpdateBanner: View {
         case .upToDate:
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                Text("Kite DPI güncel · sürüm \(updater.currentVersion)").font(.callout)
+                Text(tr("Kite DPI güncel · sürüm \(updater.currentVersion)", "Kite DPI is up to date · version \(updater.currentVersion)")).font(.callout)
                 Spacer()
             }
             .padding(10)
@@ -199,11 +200,11 @@ struct UpdateBanner: View {
             HStack {
                 Image(systemName: "arrow.down.circle.fill").foregroundStyle(.blue)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Güncelleme var").font(.callout.weight(.semibold))
-                    Text("Sürüm \(version)").font(.caption).foregroundStyle(.secondary)
+                    Text(tr("Güncelleme var", "Update available")).font(.callout.weight(.semibold))
+                    Text(tr("Sürüm \(version)", "Version \(version)")).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Güncelle") { updater.install() }
+                Button(tr("Güncelle", "Update")) { updater.install() }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
             }
@@ -212,7 +213,7 @@ struct UpdateBanner: View {
         case .installing:
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("Güncelleme indiriliyor…").font(.callout)
+                Text(tr("Güncelleme indiriliyor…", "Downloading update…")).font(.callout)
                 Spacer()
             }
             .padding(10)

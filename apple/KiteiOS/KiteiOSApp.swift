@@ -40,7 +40,7 @@ struct ContentView: View {
                         .multilineTextAlignment(.center)
                         .padding(.top, 10)
                 }
-                Text("Bekir Demircioğlu tarafından sevgiyle geliştirildi")
+                Text(tr("Bekir Demircioğlu tarafından sevgiyle geliştirildi", "Made with love by Bekir Demircioğlu"))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .padding(.top, 12)
@@ -104,7 +104,7 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .animation(.spring(duration: 0.4), value: tunnel.status)
-        .accessibilityLabel(tunnel.isOn ? "Kite DPI'ı kapat" : "Kite DPI'ı aç")
+        .accessibilityLabel(tunnel.isOn ? tr("Kite DPI'ı kapat", "Turn Kite DPI off") : tr("Kite DPI'ı aç", "Turn Kite DPI on"))
     }
 
     private var statusText: some View {
@@ -119,24 +119,25 @@ struct ContentView: View {
 
     private var title: String {
         switch tunnel.status {
-        case .connected: "Engeller aşılıyor"
-        case .connecting, .reasserting: "Bağlanıyor…"
-        case .disconnecting: "Kapatılıyor…"
-        default: "Kapalı"
+        case .connected: tr("Engeller aşılıyor", "Bypassing blocks")
+        case .connecting, .reasserting: tr("Bağlanıyor…", "Connecting…")
+        case .disconnecting: tr("Kapatılıyor…", "Turning off…")
+        default: tr("Kapalı", "Off")
         }
     }
 
     private var subtitle: String {
         tunnel.isOn
-            ? "Engelli siteler ve uygulamalar açılıyor.\nTrafiğin telefonundan çıkmıyor."
-            : "Açmak için dokun."
+            ? tr("Engelli siteler ve uygulamalar açılıyor.\nTrafiğin telefonundan çıkmıyor.",
+                 "Blocked sites and apps now open.\nYour traffic never leaves your phone.")
+            : tr("Açmak için dokun.", "Tap to turn on.")
     }
 
     private var statsCard: some View {
         HStack(spacing: 0) {
-            stat("Korunan bağlantı", "\(tunnel.stats.desynced)")
+            stat(tr("Korunan bağlantı", "Protected connections"), "\(tunnel.stats.desynced)")
             Divider().frame(height: 36).overlay(Color.white.opacity(0.1))
-            stat("İndirilen veri", ByteCountFormatter.string(fromByteCount: Int64(tunnel.stats.bytesDown), countStyle: .binary))
+            stat(tr("İndirilen veri", "Downloaded"), ByteCountFormatter.string(fromByteCount: Int64(tunnel.stats.bytesDown), countStyle: .binary))
         }
         .padding(.vertical, 14)
         .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
@@ -155,8 +156,8 @@ struct ContentView: View {
     private var settingsCard: some View {
         Toggle(isOn: Binding(get: { tunnel.alwaysOn }, set: { on in Task { await tunnel.setAlwaysOn(on) } })) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Her zaman açık")
-                Text("Telefon yeniden başlasa da Kite DPI kendiliğinden açılır.")
+                Text(tr("Her zaman açık", "Always on"))
+                Text(tr("Telefon yeniden başlasa da Kite DPI kendiliğinden açılır.", "Kite DPI turns itself back on, even after a restart."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

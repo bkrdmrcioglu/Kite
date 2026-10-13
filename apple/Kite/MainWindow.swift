@@ -85,16 +85,17 @@ struct MainWindow: View {
         .buttonStyle(PressableStyle())
         .keyboardShortcut(.space, modifiers: [])
         .animation(.spring(duration: 0.4), value: engine.running)
-        .help(engine.running ? "Kite DPI'ı kapat" : "Kite DPI'ı aç")
+        .help(engine.running ? tr("Kite DPI'ı kapat", "Turn Kite DPI off") : tr("Kite DPI'ı aç", "Turn Kite DPI on"))
     }
 
     private var statusText: some View {
         VStack(spacing: 6) {
-            Text(engine.running ? "Engeller aşılıyor" : "Kapalı")
+            Text(engine.running ? tr("Engeller aşılıyor", "Bypassing blocks") : tr("Kapalı", "Off"))
                 .font(.title3.weight(.semibold))
             Text(engine.running
-                 ? "Engelli siteler ve uygulamalar açılıyor.\nTrafiğin bilgisayarından çıkmıyor."
-                 : "Açmak için tıkla ya da boşluk tuşuna bas.")
+                 ? tr("Engelli siteler ve uygulamalar açılıyor.\nTrafiğin bilgisayarından çıkmıyor.",
+                      "Blocked sites and apps now open.\nYour traffic never leaves your computer.")
+                 : tr("Açmak için tıkla ya da boşluk tuşuna bas.", "Click or press Space to turn it on."))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -103,7 +104,7 @@ struct MainWindow: View {
 
     private var footer: some View {
         VStack(spacing: 6) {
-            Button("Güncellemeleri kontrol et") { Updater.shared.checkNow() }
+            Button(tr("Güncellemeleri kontrol et", "Check for updates")) { Updater.shared.checkNow() }
                 .buttonStyle(.link)
                 .font(.caption)
             Text(Updater.credit)
@@ -114,9 +115,9 @@ struct MainWindow: View {
 
     private var statsCard: some View {
         HStack(spacing: 0) {
-            stat("Korunan bağlantı", "\(engine.stats.desynced)")
+            stat(tr("Korunan bağlantı", "Protected connections"), "\(engine.stats.desynced)")
             Divider().frame(height: 34).overlay(Color.white.opacity(0.1))
-            stat("İndirilen veri", ByteCountFormatter.string(fromByteCount: Int64(engine.stats.bytes_down), countStyle: .binary))
+            stat(tr("İndirilen veri", "Downloaded"), ByteCountFormatter.string(fromByteCount: Int64(engine.stats.bytes_down), countStyle: .binary))
         }
         .padding(.vertical, 14)
         .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
@@ -135,8 +136,8 @@ struct MainWindow: View {
 
     private var settingsCard: some View {
         settingRow(
-            "Mac açılınca başlat",
-            "Oturum açınca Kite DPI arka planda çalışır.",
+            tr("Mac açılınca başlat", "Launch at login"),
+            tr("Oturum açınca Kite DPI arka planda çalışır.", "Kite DPI runs in the background after you log in."),
             isOn: $engine.launchAtLogin
         )
         .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))

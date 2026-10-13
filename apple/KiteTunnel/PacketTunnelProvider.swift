@@ -9,9 +9,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         var cfg = kite_config()
         kite_config_default(&cfg)
         cfg.listen_port = TunnelShared.proxyPort
+        cfg.port_fallback = 1
         if kite_start(&cfg) != 0 {
             completionHandler(NSError(domain: "Kite", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Kite DPI motoru başlatılamadı.",
+                NSLocalizedDescriptionKey: tr("Kite DPI motoru başlatılamadı.", "Could not start the Kite DPI engine."),
             ]))
             return
         }
@@ -25,7 +26,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         settings.mtu = 1500
 
         let proxy = NEProxySettings()
-        let server = NEProxyServer(address: "127.0.0.1", port: Int(TunnelShared.proxyPort))
+        let server = NEProxyServer(address: "127.0.0.1", port: Int(kite_listen_port()))
         proxy.httpEnabled = true
         proxy.httpServer = server
         proxy.httpsEnabled = true

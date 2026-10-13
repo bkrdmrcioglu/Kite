@@ -49,7 +49,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "kite: cannot listen on 127.0.0.1:%u\n", cfg.listen_port);
         return 1;
     }
-    fprintf(stderr, "kite %s listening on 127.0.0.1:%u (HTTP + SOCKS5)\n", kite_version(), cfg.listen_port);
+    fprintf(stderr, "kite %s listening on 127.0.0.1:%u (HTTP + SOCKS5)\n", kite_version(), kite_listen_port());
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
     while (!stop)
