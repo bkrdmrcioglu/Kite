@@ -2,7 +2,7 @@
 #   brew install --cask bkrdmrcioglu/tap/kite-dpi
 cask "kite-dpi" do
   version "0.1.7"
-  sha256 "e2c3fb0d698cf2f86e328e22644802ea205b879c75353264146318f4dc0c037b"
+  sha256 "6e67e5ec487523a8d653e4ffa75a9ecc7886c7012b938188c93b698d169e6c8f"
 
   url "https://github.com/bkrdmrcioglu/Kite/releases/download/v#{version}/Kite-DPI-#{version}-macOS.dmg"
   name "Kite DPI"
