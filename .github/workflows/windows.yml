@@ -1,0 +1,96 @@
+# Builds the Windows app from source on GitHub-hosted runners and, once
+# SignPath is set up, signs it there. A tag push (v0.1.8 ...) also attaches
+# the exe and zip to that tag's GitHub release.
+#
+# SignPath setup (repository Settings -> Secrets and variables -> Actions):
+#   secret   SIGNPATH_API_TOKEN        API token of the SignPath CI user
+#   variable SIGNPATH_ORGANIZATION_ID  SignPath organization ID
+#   variable SIGNPATH_PROJECT_SLUG     e.g. Kite
+#   variable SIGNPATH_POLICY_SLUG      release-signing (test-signing while testing)
+# Until SIGNPATH_ORGANIZATION_ID is set, builds are published unsigned.
+
+name: Windows
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mingw-w64
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mingw-w64
+
+      - name: Read version
+        id: version
+        run: |
+          v=$(sed -n 's/^#define KITE_VERSION "\(.*\)"/\1/p' core/src/proxy.c)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v$v" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match KITE_VERSION $v in core/src/proxy.c"
+            exit 1
+          fi
+
+      - name: Build
+        run: |
+          make windows
+          mkdir -p out
+          cp build/win/Kite.exe "out/Kite-DPI-${{ steps.version.outputs.version }}-Windows-x64.exe"
+
+      - name: Upload unsigned build
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: kite-windows-unsigned
+          path: out/*.exe
+          if-no-files-found: error
+
+      - name: Sign with SignPath
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          # each release is approved by hand in SignPath; give it time
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: out
+
+      - name: Package zip
+        run: |
+          exe="out/Kite-DPI-${{ steps.version.outputs.version }}-Windows-x64.exe"
+          mkdir -p zip && cp "$exe" "zip/Kite DPI.exe"
+          (cd zip && zip -q "../out/Kite-DPI-${{ steps.version.outputs.version }}-Windows-x64.zip" "Kite DPI.exe")
+          sha256sum out/*
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: kite-windows
+          path: out/*
+
+      - name: Attach to release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" out/* --clobber
+          else
+            # draft, so the in-app updater ignores it until the macOS DMG is
+            # added and the release is published by hand
+            gh release create "$tag" out/* --draft --title "Kite DPI ${tag#v}" --generate-notes
+          fi

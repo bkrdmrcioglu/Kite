@@ -26,7 +26,7 @@ Kite DPI, operatörlerin **DPI (Derin Paket İnceleme)** ile yaptığı site eng
 | **Windows** 10/11 (x64) | [Kite-DPI-Windows-x64.exe](https://github.com/bkrdmrcioglu/Kite/releases/latest) |
 | **iOS** 17+ | Yakında (TestFlight) |
 
-Windows sürümü henüz imzalı değil. SmartScreen uyarısı çıkarsa **Ek bilgi → Yine de çalıştır**'a tıkla.
+Windows sürümü henüz imzalı değil. SmartScreen uyarısı çıkarsa **Ek bilgi → Yine de çalıştır**'a tıkla. Windows 11'de **Akıllı Uygulama Denetimi** açıksa uygulama "Yine de çalıştır" seçeneği olmadan engellenir; imzalı sürüm gelene kadar bu özelliği kapatman gerekir (Windows Güvenliği → Uygulama ve tarayıcı denetimi). İmzalama için bkz. [Code signing policy](#code-signing-policy).
 
 ### Nasıl çalışır?
 
@@ -132,6 +132,19 @@ The script opens one TLS connection per strategy and shows which ones get throug
 ### Privacy
 
 Kite DPI has no servers, analytics or telemetry. The only connections it makes on its own are DNS-over-TCP queries to public resolvers (1.1.1.1, 1.0.0.1, 8.8.8.8, 9.9.9.9) and an update check against this repository's GitHub releases at launch and every 6 hours.
+
+### Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+Windows releases are built from this repository by [GitHub Actions](.github/workflows/windows.yml) and signed only after manual approval.
+
+| Role | Members |
+| --- | --- |
+| Committers and reviewers | [bkrdmrcioglu](https://github.com/bkrdmrcioglu) |
+| Approvers | [bkrdmrcioglu](https://github.com/bkrdmrcioglu) |
+
+Privacy: this program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it, apart from the DNS queries and update check described under [Privacy](#privacy).
 
 ### License
 
