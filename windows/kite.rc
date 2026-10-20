@@ -10,7 +10,11 @@ BEGIN
   BEGIN
     BLOCK "040904b0"
     BEGIN
+      VALUE "CompanyName", "Bekir Demircioglu"
       VALUE "FileDescription", "Kite DPI"
+      VALUE "InternalName", "Kite"
+      VALUE "LegalCopyright", "Copyright (c) Bekir Demircioglu. MIT License."
+      VALUE "OriginalFilename", "Kite.exe"
       VALUE "ProductName", "Kite DPI"
       VALUE "FileVersion", "0.1.7"
       VALUE "ProductVersion", "0.1.7"
